@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Release
+        run: |
+          xcodebuild -scheme SkillsBar \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Create zip
+        run: |
+          APP_PATH=$(find build -name "SkillsBar.app" -type d | head -1)
+          ditto -c -k --keepParent "$APP_PATH" SkillsBar-${{ github.ref_name }}.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SkillsBar ${{ github.ref_name }}
+          body: |
+            ## SkillsBar ${{ github.ref_name }}
+
+            A native macOS menu bar app for browsing and managing your Claude Code and Codex CLI skills.
+
+            ### Installation
+            1. Download `SkillsBar-${{ github.ref_name }}.zip` below
+            2. Unzip and move `SkillsBar.app` to your Applications folder
+            3. Right-click the app and select **Open** on first launch (required for unsigned builds)
+
+            ### Requirements
+            - macOS 14 (Sonoma) or later
+          files: SkillsBar-${{ github.ref_name }}.zip
