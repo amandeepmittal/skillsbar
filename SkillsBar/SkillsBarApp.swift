@@ -117,7 +117,6 @@ enum MenuBarIcon {
         let cx = size / 2
         let cy = size / 2
 
-        // Draw a forward slash (the way you invoke skills)
         let slashPath = NSBezierPath()
         slashPath.lineWidth = 2.0
         slashPath.lineCapStyle = .round
@@ -125,28 +124,6 @@ enum MenuBarIcon {
         slashPath.line(to: NSPoint(x: cx + 2.5, y: cy + 5.5))
         NSColor.black.setStroke()
         slashPath.stroke()
-
-        // Draw a 4-point sparkle (AI) at top-right
-        let sx: CGFloat = cx + 5.5
-        let sy: CGFloat = cy + 4.0
-        let sparkleSize: CGFloat = 2.8
-
-        let sparklePath = NSBezierPath()
-        // Vertical
-        sparklePath.move(to: NSPoint(x: sx, y: sy - sparkleSize))
-        sparklePath.line(to: NSPoint(x: sx, y: sy + sparkleSize))
-        // Horizontal
-        sparklePath.move(to: NSPoint(x: sx - sparkleSize, y: sy))
-        sparklePath.line(to: NSPoint(x: sx + sparkleSize, y: sy))
-
-        sparklePath.lineWidth = 1.0
-        sparklePath.lineCapStyle = .round
-        sparklePath.stroke()
-
-        // Small dot at sparkle center
-        let dotRect = NSRect(x: sx - 0.6, y: sy - 0.6, width: 1.2, height: 1.2)
-        NSColor.black.setFill()
-        NSBezierPath(ovalIn: dotRect).fill()
 
         image.unlockFocus()
         image.isTemplate = true
