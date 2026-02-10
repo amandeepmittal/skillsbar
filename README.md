@@ -40,15 +40,21 @@
 | `~/.claude/plugins/cache/` | Claude Code plugin skills |
 | `~/.codex/skills/` | Codex CLI built-in and user skills |
 
+## Install
+
+1. Download `SkillsBar-vX.X.X.zip` from the [latest release](https://github.com/amandeepmittal/skillsbar/releases/latest)
+2. Unzip and move `SkillsBar.app` to your Applications folder
+3. Right-click the app and select **Open** on first launch (required for unsigned builds)
+
 ## Requirements
 
 - macOS 14 (Sonoma) or later
 - Xcode 15+ (to build from source)
 
-## Build & Run
+## Build from Source
 
 ```bash
-git clone https://github.com/amanhimself/skillsbar.git
+git clone https://github.com/amandeepmittal/skillsbar.git
 cd skillsbar
 xcodebuild -scheme SkillsBar -configuration Release build
 ```
