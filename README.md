@@ -71,7 +71,7 @@ Or open `SkillsBar.xcodeproj` in Xcode and hit Run.
 
 ## License
 
-MIT
+Apache-2.0
 
 ## Author
 
