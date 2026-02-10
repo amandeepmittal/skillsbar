@@ -7,9 +7,7 @@ struct SkillsBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        Settings {
-            EmptyView()
-        }
+        Settings { }
     }
 }
 
@@ -22,6 +20,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var eventHandler: EventHandlerRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Prevent Settings window from appearing on launch
+        NSApp.setActivationPolicy(.accessory)
+
         Task { @MainActor in
             store.start()
         }
