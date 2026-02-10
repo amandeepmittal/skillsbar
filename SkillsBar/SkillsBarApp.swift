@@ -2,15 +2,6 @@ import SwiftUI
 import AppKit
 import Carbon.HIToolbox
 
-@main
-struct SkillsBarApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    var body: some Scene {
-        Settings { }
-    }
-}
-
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!

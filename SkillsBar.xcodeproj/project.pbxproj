@@ -21,6 +21,7 @@
 		A10001012 /* SectionHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002012; };
 		A10001013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10002013; };
 		A10001014 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002015; };
+		A10001015 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002016; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +41,7 @@
 		A10002013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A10002014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10002015 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		A10002016 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				A10002001 /* SkillsBarApp.swift */,
+				A10002016 /* main.swift */,
 				A10002014 /* Info.plist */,
 				A10002013 /* Assets.xcassets */,
 				A10005003 /* Models */,
@@ -197,6 +200,7 @@
 				A10001011 /* SkillDetailView.swift in Sources */,
 				A10001012 /* SectionHeaderView.swift in Sources */,
 				A10001014 /* AboutView.swift in Sources */,
+				A10001015 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
