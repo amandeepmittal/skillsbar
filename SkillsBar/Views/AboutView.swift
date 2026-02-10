@@ -39,7 +39,7 @@ struct AboutView: View {
                 VStack(spacing: 4) {
                     Text("SkillsBar")
                         .font(.system(size: 22, weight: .bold))
-                    Text("Version 1.0.0")
+                    Text("Version 1.0.1")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
@@ -74,7 +74,7 @@ struct AboutView: View {
                 // Links
                 HStack(spacing: 20) {
                     Button {
-                        if let url = URL(string: "https://github.com/amanhimself/skillsbar") {
+                        if let url = URL(string: "https://github.com/amandeepmittal/skillsbar") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
