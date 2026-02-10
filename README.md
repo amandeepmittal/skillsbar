@@ -16,6 +16,8 @@
   <img src="screenshots/pinned-skills.png" width="320" alt="Pinned skills" />
   &nbsp;&nbsp;
   <img src="screenshots/detail-view.png" width="320" alt="Detail view" />
+  &nbsp;&nbsp;
+  <img src="screenshots/dark-mode.png" width="320" alt="Dark mode" />
 </p>
 
 ## Features
@@ -44,7 +46,11 @@
 
 1. Download `SkillsBar-vX.X.X.zip` from the [latest release](https://github.com/amandeepmittal/skillsbar/releases/latest)
 2. Unzip and move `SkillsBar.app` to your Applications folder
-3. Right-click the app and select **Open** on first launch (required for unsigned builds)
+3. Remove the quarantine flag (required once for unsigned builds):
+   ```bash
+   xattr -cr /Applications/SkillsBar.app
+   ```
+4. Open `SkillsBar.app` from Applications or Spotlight
 
 ## Requirements
 
