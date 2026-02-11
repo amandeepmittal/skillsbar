@@ -45,7 +45,7 @@ struct AboutView: View {
                 }
 
                 // Description
-                Text("A macOS menu bar app for browsing and managing your Claude Code and Codex CLI skills.")
+                Text("A macOS menu bar app for browsing and managing your Claude Code and Codex CLI skills and agents.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

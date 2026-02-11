@@ -5,7 +5,7 @@
 <h1 align="center">SkillsBar</h1>
 
 <p align="center">
-  A native macOS menu bar app for browsing and managing your <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> and <a href="https://github.com/openai/codex">Codex CLI</a> skills.
+  A macOS menu bar app for browsing and managing your <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> and <a href="https://github.com/openai/codex">Codex CLI</a> skills and agents.
 </p>
 
 ## Screenshots
