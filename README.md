@@ -31,6 +31,7 @@
 - **Quick actions** - open in VS Code, open in default editor, copy path, reveal in Finder, delete
 - **Right-click context menu** - pin, open, copy, delete directly from the list
 - **Global hotkey** - toggle the popover from anywhere with `Option + Shift + S`
+- **Agent browsing** - browse Claude Code sub-agents (user and plugin) with model, color, and tools metadata
 - **Live updates** - FSEvents directory watcher auto-refreshes when skills are added or removed
 - **No dock icon** - lives entirely in the menu bar
 
@@ -40,6 +41,7 @@
 |------|--------|
 | `~/.claude/skills/` | Claude Code user skills |
 | `~/.claude/plugins/cache/` | Claude Code plugin skills |
+| `~/.claude/agents/` | Claude Code user agents |
 | `~/.codex/skills/` | Codex CLI built-in and user skills |
 
 ## Install
