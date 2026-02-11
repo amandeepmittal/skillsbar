@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let store = SkillStore()
+    private let usageTracker = UsageTracker()
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
 
@@ -16,6 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task { @MainActor in
             store.start()
+            usageTracker.refresh()
         }
 
         // Popover
@@ -24,7 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(
-            rootView: MenuBarView(store: store)
+            rootView: MenuBarView(store: store, usageTracker: usageTracker)
         )
 
         // Status item

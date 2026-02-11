@@ -28,6 +28,9 @@
 		A10001019 /* AgentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002020; };
 		A10001020 /* AgentRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002021; };
 		A10001021 /* AgentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002022; };
+		A10001022 /* SkillUsageStat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002023; };
+		A10001023 /* UsageTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002024; };
+		A10001024 /* UsageStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002025; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +57,9 @@
 		A10002020 /* AgentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentScanner.swift; sourceTree = "<group>"; };
 		A10002021 /* AgentRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRowView.swift; sourceTree = "<group>"; };
 		A10002022 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
+		A10002023 /* SkillUsageStat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillUsageStat.swift; sourceTree = "<group>"; };
+		A10002024 /* UsageTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageTracker.swift; sourceTree = "<group>"; };
+		A10002025 /* UsageStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStatsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,6 +104,7 @@
 				A10002017 /* Agent.swift */,
 				A10002018 /* AgentSource.swift */,
 				A10002019 /* AgentGroup.swift */,
+				A10002023 /* SkillUsageStat.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -110,6 +117,7 @@
 				A10002007 /* FSEventsWatcher.swift */,
 				A10002008 /* SkillStore.swift */,
 				A10002020 /* AgentScanner.swift */,
+				A10002024 /* UsageTracker.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -124,6 +132,7 @@
 				A10002015 /* AboutView.swift */,
 				A10002021 /* AgentRowView.swift */,
 				A10002022 /* AgentDetailView.swift */,
+				A10002025 /* UsageStatsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -225,6 +234,9 @@
 				A10001019 /* AgentScanner.swift in Sources */,
 				A10001020 /* AgentRowView.swift in Sources */,
 				A10001021 /* AgentDetailView.swift in Sources */,
+				A10001022 /* SkillUsageStat.swift in Sources */,
+				A10001023 /* UsageTracker.swift in Sources */,
+				A10001024 /* UsageStatsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,7 +378,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.amanhimself.skillsbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -393,7 +405,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.amanhimself.skillsbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

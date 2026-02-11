@@ -3,6 +3,7 @@ import SwiftUI
 struct SkillRowView: View {
     let skill: Skill
     let isPinned: Bool
+    var usageCount: Int? = nil
     @State private var isHovered = false
 
     private var hoverColor: Color {
@@ -32,6 +33,15 @@ struct SkillRowView: View {
                             .padding(.vertical, 2)
                             .background(Color.blue.opacity(0.15))
                             .foregroundStyle(.blue)
+                            .clipShape(Capsule())
+                    }
+                    if let count = usageCount, count > 0 {
+                        Text("\(count)x")
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.15))
+                            .foregroundStyle(.green)
                             .clipShape(Capsule())
                     }
                 }

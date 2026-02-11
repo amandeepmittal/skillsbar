@@ -7,15 +7,23 @@ private let cardRadius: CGFloat = 12
 
 struct MenuBarView: View {
     @ObservedObject var store: SkillStore
+    @ObservedObject var usageTracker: UsageTracker
     @State private var selectedSkill: Skill?
     @State private var selectedAgent: Agent?
     @State private var selectedTab: SkillStore.SkillTab = .claudeCode
     @State private var showAbout = false
+    @State private var showUsageStats = false
 
     var body: some View {
         Group {
             if showAbout {
                 AboutView(onBack: { showAbout = false })
+            } else if showUsageStats {
+                UsageStatsView(
+                    usageTracker: usageTracker,
+                    installedSkillNames: installedSkillTriggerNames,
+                    onBack: { showUsageStats = false }
+                )
             } else if let agent = selectedAgent {
                 AgentDetailView(
                     agent: agent,
@@ -32,6 +40,7 @@ struct MenuBarView: View {
                 SkillDetailView(
                     skill: skill,
                     isPinned: store.isPinned(skill),
+                    usageStat: usageTracker.stat(for: skill.triggerCommand),
                     onBack: { selectedSkill = nil },
                     onDelete: { skill in
                         store.deleteSkill(skill)
@@ -99,7 +108,10 @@ struct MenuBarView: View {
 
             // Footer card
             HStack {
-                Button(action: { store.refresh() }) {
+                Button(action: {
+                    store.refresh()
+                    usageTracker.refresh()
+                }) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 12))
@@ -109,7 +121,21 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Refresh skills")
+                .help("Refresh skills & stats")
+
+                Spacer()
+
+                Button(action: { showUsageStats = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chart.bar")
+                            .font(.system(size: 12))
+                        Text("Stats")
+                            .font(.system(size: 12))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Usage statistics")
 
                 Spacer()
 
@@ -243,7 +269,8 @@ struct MenuBarView: View {
                 Button(action: { selectedSkill = skill }) {
                     SkillRowView(
                         skill: skill,
-                        isPinned: store.isPinned(skill)
+                        isPinned: store.isPinned(skill),
+                        usageCount: usageTracker.stat(for: skill.triggerCommand)?.totalCount
                     )
                 }
                 .buttonStyle(.plain)
@@ -425,5 +452,13 @@ struct MenuBarView: View {
         case .codex:
             return "~/.codex/skills/"
         }
+    }
+
+    private var installedSkillTriggerNames: Set<String> {
+        let allSkills = store.groups.flatMap { $0.sections.flatMap { $0.skills } }
+        return Set(allSkills.map { skill in
+            let cmd = skill.triggerCommand
+            return cmd.hasPrefix("/") ? String(cmd.dropFirst()) : cmd
+        })
     }
 }

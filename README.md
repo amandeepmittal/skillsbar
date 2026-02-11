@@ -18,6 +18,8 @@
   <img src="screenshots/detail-view.png" width="320" alt="Detail view" />
   &nbsp;&nbsp;
   <img src="screenshots/dark-mode.png" width="320" alt="Dark mode" />
+  &nbsp;&nbsp;
+  <img src="screenshots/usage-stats.png" width="320" alt="Usage stats" />
 </p>
 
 ## Features
@@ -25,6 +27,7 @@
 - **Tabbed browsing** - separate tabs for Claude Code and Codex skills with count badges
 - **Search** - filter skills by name or description
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
+- **Usage stats** - tracks skill invocations from Claude Code session transcripts with insights, ranked list, and per-skill usage cards
 - **"New" indicator** - skills modified in the last 24 hours are marked with a blue badge
 - **Detail view** - metadata badges, description, trigger command with copy button, file listing
 - **Full content preview** - expandable section to view the raw SKILL.md body

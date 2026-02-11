@@ -3,6 +3,7 @@ import SwiftUI
 struct SkillDetailView: View {
     let skill: Skill
     let isPinned: Bool
+    var usageStat: SkillUsageStat? = nil
     let onBack: () -> Void
     let onDelete: (Skill) -> Void
     let onTogglePin: (Skill) -> Void
@@ -185,6 +186,78 @@ struct SkillDetailView: View {
                     .background(cardBg)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
+                    // Usage card
+                    if let stat = usageStat {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("USAGE")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+
+                            HStack(spacing: 0) {
+                                VStack(spacing: 4) {
+                                    Text("\(stat.totalCount)")
+                                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                    Text("Total Uses")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+
+                                Divider().frame(height: 30)
+
+                                VStack(spacing: 4) {
+                                    if let lastUsed = stat.lastUsedDate {
+                                        Text(relativeDate(lastUsed))
+                                            .font(.system(size: 14, weight: .semibold))
+                                    } else {
+                                        Text("--")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                    Text("Last Used")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+
+                                Divider().frame(height: 30)
+
+                                VStack(spacing: 4) {
+                                    if let firstUsed = stat.firstUsedDate {
+                                        Text(relativeDate(firstUsed))
+                                            .font(.system(size: 14, weight: .semibold))
+                                    } else {
+                                        Text("--")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                    Text("First Used")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+
+                            if stat.isStale {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.orange)
+                                    Text("Not used in over 30 days")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+
+                            Text(stat.frequencyDescription)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(cardBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
                     // Full content preview card
                     if !skill.body.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -304,6 +377,12 @@ struct SkillDetailView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func relativeDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private func fileIcon(for filename: String) -> String {
