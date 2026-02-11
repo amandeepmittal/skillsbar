@@ -22,6 +22,12 @@
 		A10001013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10002013; };
 		A10001014 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002015; };
 		A10001015 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002016; };
+		A10001016 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002017; };
+		A10001017 /* AgentSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002018; };
+		A10001018 /* AgentGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002019; };
+		A10001019 /* AgentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002020; };
+		A10001020 /* AgentRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002021; };
+		A10001021 /* AgentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002022; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +48,12 @@
 		A10002014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10002015 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		A10002016 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A10002017 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
+		A10002018 /* AgentSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSource.swift; sourceTree = "<group>"; };
+		A10002019 /* AgentGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentGroup.swift; sourceTree = "<group>"; };
+		A10002020 /* AgentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentScanner.swift; sourceTree = "<group>"; };
+		A10002021 /* AgentRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRowView.swift; sourceTree = "<group>"; };
+		A10002022 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,6 +95,9 @@
 				A10002002 /* Skill.swift */,
 				A10002003 /* SkillSource.swift */,
 				A10002004 /* SkillGroup.swift */,
+				A10002017 /* Agent.swift */,
+				A10002018 /* AgentSource.swift */,
+				A10002019 /* AgentGroup.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -94,6 +109,7 @@
 				A10002006 /* SkillScanner.swift */,
 				A10002007 /* FSEventsWatcher.swift */,
 				A10002008 /* SkillStore.swift */,
+				A10002020 /* AgentScanner.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -106,6 +122,8 @@
 				A10002011 /* SkillDetailView.swift */,
 				A10002012 /* SectionHeaderView.swift */,
 				A10002015 /* AboutView.swift */,
+				A10002021 /* AgentRowView.swift */,
+				A10002022 /* AgentDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -201,6 +219,12 @@
 				A10001012 /* SectionHeaderView.swift in Sources */,
 				A10001014 /* AboutView.swift in Sources */,
 				A10001015 /* main.swift in Sources */,
+				A10001016 /* Agent.swift in Sources */,
+				A10001017 /* AgentSource.swift in Sources */,
+				A10001018 /* AgentGroup.swift in Sources */,
+				A10001019 /* AgentScanner.swift in Sources */,
+				A10001020 /* AgentRowView.swift in Sources */,
+				A10001021 /* AgentDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

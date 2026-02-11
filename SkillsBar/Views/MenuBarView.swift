@@ -8,6 +8,7 @@ private let cardRadius: CGFloat = 12
 struct MenuBarView: View {
     @ObservedObject var store: SkillStore
     @State private var selectedSkill: Skill?
+    @State private var selectedAgent: Agent?
     @State private var selectedTab: SkillStore.SkillTab = .claudeCode
     @State private var showAbout = false
 
@@ -15,6 +16,18 @@ struct MenuBarView: View {
         Group {
             if showAbout {
                 AboutView(onBack: { showAbout = false })
+            } else if let agent = selectedAgent {
+                AgentDetailView(
+                    agent: agent,
+                    isPinned: store.isPinnedAgent(agent),
+                    onBack: { selectedAgent = nil },
+                    onDelete: { agent in
+                        store.deleteAgent(agent)
+                    },
+                    onTogglePin: { agent in
+                        store.togglePinAgent(agent)
+                    }
+                )
             } else if let skill = selectedSkill {
                 SkillDetailView(
                     skill: skill,
@@ -40,7 +53,7 @@ struct MenuBarView: View {
                 Text("SkillsBar")
                     .font(.system(size: 16, weight: .bold))
                 Spacer()
-                Text("\(store.totalSkillCount) skills")
+                Text("\(store.totalItemCount) skills & agents")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
@@ -81,80 +94,8 @@ struct MenuBarView: View {
             .clipShape(RoundedRectangle(cornerRadius: cardRadius))
             .padding(.horizontal, 12)
 
-            // Skill list for selected tab
-            let tabGroups = store.groupsForTab(selectedTab)
-            if tabGroups.isEmpty {
-                emptyStateView
-            } else {
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(tabGroups) { group in
-                            ForEach(group.sections) { section in
-                                // Each section is its own card
-                                VStack(alignment: .leading, spacing: 0) {
-                                    // Section header
-                                    if group.sections.count > 1 || group.id == "pinned" {
-                                        HStack(spacing: 5) {
-                                            if group.id == "pinned" {
-                                                Image(systemName: "star.fill")
-                                                    .font(.system(size: 10))
-                                                    .foregroundStyle(.yellow)
-                                            }
-                                            Text(section.title.uppercased())
-                                                .font(.system(size: 11, weight: .semibold))
-                                                .foregroundStyle(.secondary)
-                                                .tracking(0.5)
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.top, 10)
-                                        .padding(.bottom, 4)
-                                    }
-
-                                    ForEach(Array(section.skills.enumerated()), id: \.element.id) { index, skill in
-                                        if index > 0 {
-                                            Divider()
-                                                .padding(.leading, 44)
-                                        }
-                                        Button(action: { selectedSkill = skill }) {
-                                            SkillRowView(
-                                                skill: skill,
-                                                isPinned: store.isPinned(skill)
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                        .contextMenu {
-                                            Button(store.isPinned(skill) ? "Unpin" : "Pin") {
-                                                store.togglePin(skill)
-                                            }
-                                            Divider()
-                                            Button("Open in VS Code") {
-                                                SkillStore.openInVSCode(skill)
-                                            }
-                                            Button("Open in Default Editor") {
-                                                SkillStore.openInDefaultEditor(skill)
-                                            }
-                                            Divider()
-                                            Button("Copy Path") {
-                                                NSPasteboard.general.clearContents()
-                                                NSPasteboard.general.setString(skill.path, forType: .string)
-                                            }
-                                            Divider()
-                                            Button("Delete Skill", role: .destructive) {
-                                                store.deleteSkill(skill)
-                                            }
-                                        }
-                                    }
-                                }
-                                .background(cardBackground)
-                                .clipShape(RoundedRectangle(cornerRadius: cardRadius))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                }
-                .frame(maxHeight: 600)
-            }
+            // Content list
+            contentListView
 
             // Footer card
             HStack {
@@ -203,6 +144,197 @@ struct MenuBarView: View {
         .frame(width: 440)
     }
 
+    // MARK: - Content List
+
+    private var contentListView: some View {
+        let tabGroups = store.groupsForTab(selectedTab)
+        let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
+        let hasContent = !tabGroups.isEmpty || !agentGroups.isEmpty
+
+        return Group {
+            if !hasContent {
+                emptyStateView
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        if selectedTab == .claudeCode {
+                            // Pinned sections first
+                            ForEach(tabGroups.filter { $0.id == "pinned" }) { group in
+                                ForEach(group.sections) { section in
+                                    skillSectionCard(group: group, section: section)
+                                }
+                            }
+                            ForEach(agentGroups.filter { $0.id == "pinned" }) { group in
+                                ForEach(group.sections) { section in
+                                    agentSectionCard(group: group, section: section)
+                                }
+                            }
+
+                            // User Skills
+                            ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                ForEach(group.sections.filter { $0.id == "claude-user" }) { section in
+                                    skillSectionCard(group: group, section: section)
+                                }
+                            }
+
+                            // User Agents
+                            ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
+                                ForEach(group.sections.filter { $0.id == "agent-user" }) { section in
+                                    agentSectionCard(group: group, section: section)
+                                }
+                            }
+
+                            // Plugin Skills
+                            ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                ForEach(group.sections.filter { $0.id == "claude-plugin" }) { section in
+                                    skillSectionCard(group: group, section: section)
+                                }
+                            }
+
+                            // Plugin Agents
+                            ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
+                                ForEach(group.sections.filter { $0.id == "agent-plugin" }) { section in
+                                    agentSectionCard(group: group, section: section)
+                                }
+                            }
+                        } else {
+                            // Codex tab - just skills
+                            ForEach(tabGroups) { group in
+                                ForEach(group.sections) { section in
+                                    skillSectionCard(group: group, section: section)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                }
+                .frame(maxHeight: 600)
+            }
+        }
+    }
+
+    // MARK: - Skill Section Card
+
+    private func skillSectionCard(group: SkillGroup, section: SkillSection) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if group.sections.count > 1 || group.id == "pinned" {
+                HStack(spacing: 5) {
+                    if group.id == "pinned" {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.yellow)
+                    }
+                    Text(section.title.uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+            }
+
+            ForEach(Array(section.skills.enumerated()), id: \.element.id) { index, skill in
+                if index > 0 {
+                    Divider()
+                        .padding(.leading, 44)
+                }
+                Button(action: { selectedSkill = skill }) {
+                    SkillRowView(
+                        skill: skill,
+                        isPinned: store.isPinned(skill)
+                    )
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button(store.isPinned(skill) ? "Unpin" : "Pin") {
+                        store.togglePin(skill)
+                    }
+                    Divider()
+                    Button("Open in VS Code") {
+                        SkillStore.openInVSCode(skill)
+                    }
+                    Button("Open in Default Editor") {
+                        SkillStore.openInDefaultEditor(skill)
+                    }
+                    Divider()
+                    Button("Copy Path") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(skill.path, forType: .string)
+                    }
+                    Divider()
+                    Button("Delete Skill", role: .destructive) {
+                        store.deleteSkill(skill)
+                    }
+                }
+            }
+        }
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    // MARK: - Agent Section Card
+
+    private func agentSectionCard(group: AgentGroup, section: AgentSection) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Always show section header for agents so they're distinguishable from skills
+            HStack(spacing: 5) {
+                if group.id == "pinned" {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.yellow)
+                }
+                Text(section.title.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+
+            ForEach(Array(section.agents.enumerated()), id: \.element.id) { index, agent in
+                if index > 0 {
+                    Divider()
+                        .padding(.leading, 44)
+                }
+                Button(action: { selectedAgent = agent }) {
+                    AgentRowView(
+                        agent: agent,
+                        isPinned: store.isPinnedAgent(agent)
+                    )
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button(store.isPinnedAgent(agent) ? "Unpin" : "Pin") {
+                        store.togglePinAgent(agent)
+                    }
+                    Divider()
+                    Button("Open in VS Code") {
+                        SkillStore.openAgentInVSCode(agent)
+                    }
+                    Button("Open in Default Editor") {
+                        SkillStore.openAgentInDefaultEditor(agent)
+                    }
+                    Divider()
+                    Button("Copy Path") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(agent.path, forType: .string)
+                    }
+                    Divider()
+                    Button("Delete Agent", role: .destructive) {
+                        store.deleteAgent(agent)
+                    }
+                }
+            }
+        }
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    // MARK: - Tab Helpers
+
     private func tabColor(for tab: SkillStore.SkillTab) -> Color {
         switch tab {
         case .claudeCode: return claudeColor
@@ -237,6 +369,8 @@ struct MenuBarView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
+    // MARK: - Empty State
+
     private var emptyStateView: some View {
         VStack(spacing: 10) {
             if store.searchText.isEmpty {
@@ -247,7 +381,6 @@ struct MenuBarView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
 
-                // Tab-specific guidance
                 VStack(alignment: .leading, spacing: 6) {
                     Text(emptyStateHint)
                         .font(.system(size: 12))

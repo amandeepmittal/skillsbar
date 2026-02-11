@@ -4,10 +4,12 @@ import SwiftUI
 @MainActor
 final class SkillStore: ObservableObject {
     @Published var groups: [SkillGroup] = []
+    @Published var agentGroups: [AgentGroup] = []
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
 
     private let scanner = SkillScanner()
+    private let agentScanner = AgentScanner()
     private var watcher: FSEventsWatcher?
 
     private static let pinnedKey = "pinnedSkillPaths"
@@ -18,7 +20,7 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    // MARK: - Pinning
+    // MARK: - Pinning (Skills)
 
     func isPinned(_ skill: Skill) -> Bool {
         pinnedPaths.contains(skill.path)
@@ -33,7 +35,22 @@ final class SkillStore: ObservableObject {
         UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
     }
 
-    // MARK: - Filtering
+    // MARK: - Pinning (Agents)
+
+    func isPinnedAgent(_ agent: Agent) -> Bool {
+        pinnedPaths.contains(agent.path)
+    }
+
+    func togglePinAgent(_ agent: Agent) {
+        if pinnedPaths.contains(agent.path) {
+            pinnedPaths.remove(agent.path)
+        } else {
+            pinnedPaths.insert(agent.path)
+        }
+        UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
+    }
+
+    // MARK: - Filtering (Skills)
 
     var filteredGroups: [SkillGroup] {
         guard !searchText.isEmpty else { return groups }
@@ -53,6 +70,10 @@ final class SkillStore: ObservableObject {
 
     var totalSkillCount: Int {
         groups.reduce(0) { $0 + $1.totalCount }
+    }
+
+    var totalItemCount: Int {
+        totalSkillCount + agentGroups.reduce(0) { $0 + $1.totalCount }
     }
 
     func groupsForTab(_ tab: SkillTab) -> [SkillGroup] {
@@ -91,11 +112,59 @@ final class SkillStore: ObservableObject {
         return tabGroups
     }
 
+    // MARK: - Filtering (Agents)
+
+    var agentGroupsFiltered: [AgentGroup] {
+        guard !searchText.isEmpty else { return agentGroups }
+        let query = searchText.lowercased()
+
+        return agentGroups.compactMap { group in
+            let filteredSections = group.sections.compactMap { section in
+                let filtered = section.agents.filter { agent in
+                    agent.name.lowercased().contains(query) ||
+                    agent.description.lowercased().contains(query)
+                }
+                return filtered.isEmpty ? nil : AgentSection(id: section.id, title: section.title, agents: filtered)
+            }
+            return filteredSections.isEmpty ? nil : AgentGroup(id: group.id, title: group.title, sections: filteredSections)
+        }
+    }
+
+    func agentGroupsForTab() -> [AgentGroup] {
+        let source = agentGroupsFiltered
+        var tabGroups = source.filter { $0.id == "agents" }
+
+        // Build pinned section from agents
+        let allAgents = tabGroups.flatMap { $0.sections.flatMap { $0.agents } }
+        let pinned = allAgents.filter { pinnedPaths.contains($0.path) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        if !pinned.isEmpty {
+            let pinnedPathSet = Set(pinned.map { $0.path })
+
+            tabGroups = tabGroups.compactMap { group in
+                let newSections = group.sections.compactMap { section in
+                    let remaining = section.agents.filter { !pinnedPathSet.contains($0.path) }
+                    return remaining.isEmpty ? nil : AgentSection(id: section.id, title: section.title, agents: remaining)
+                }
+                return newSections.isEmpty ? nil : AgentGroup(id: group.id, title: group.title, sections: newSections)
+            }
+
+            let pinnedSection = AgentSection(id: "pinned", title: "Pinned", agents: pinned)
+            let pinnedGroup = AgentGroup(id: "pinned", title: "Pinned", sections: [pinnedSection])
+            tabGroups.insert(pinnedGroup, at: 0)
+        }
+
+        return tabGroups
+    }
+
     func countForTab(_ tab: SkillTab) -> Int {
         let allGroups = groups
         switch tab {
         case .claudeCode:
-            return allGroups.filter { $0.id == "claude-code" }.reduce(0) { $0 + $1.totalCount }
+            let skillCount = allGroups.filter { $0.id == "claude-code" }.reduce(0) { $0 + $1.totalCount }
+            let agentCount = agentGroups.reduce(0) { $0 + $1.totalCount }
+            return skillCount + agentCount
         case .codex:
             return allGroups.filter { $0.id == "codex-cli" }.reduce(0) { $0 + $1.totalCount }
         }
@@ -118,6 +187,9 @@ final class SkillStore: ObservableObject {
     func refresh() {
         let skills = scanner.scanAll()
         groups = buildGroups(from: skills)
+
+        let agents = agentScanner.scanAll()
+        agentGroups = buildAgentGroups(from: agents)
     }
 
     func deleteSkill(_ skill: Skill) {
@@ -126,6 +198,14 @@ final class SkillStore: ObservableObject {
 
         try? fileManager.removeItem(atPath: skillDir)
         pinnedPaths.remove(skill.path)
+        UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
+        refresh()
+    }
+
+    func deleteAgent(_ agent: Agent) {
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(atPath: agent.path)
+        pinnedPaths.remove(agent.path)
         UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
         refresh()
     }
@@ -143,6 +223,19 @@ final class SkillStore: ObservableObject {
         NSWorkspace.shared.open(URL(fileURLWithPath: skill.path))
     }
 
+    static func openAgentInVSCode(_ agent: Agent) {
+        let url = URL(fileURLWithPath: agent.path)
+        NSWorkspace.shared.open(
+            [url],
+            withApplicationAt: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"),
+            configuration: NSWorkspace.OpenConfiguration()
+        )
+    }
+
+    static func openAgentInDefaultEditor(_ agent: Agent) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: agent.path))
+    }
+
     // MARK: - Watching
 
     private func startWatching() {
@@ -151,6 +244,7 @@ final class SkillStore: ObservableObject {
             (home as NSString).appendingPathComponent(".claude/skills"),
             (home as NSString).appendingPathComponent(".claude/plugins/cache"),
             (home as NSString).appendingPathComponent(".codex/skills"),
+            (home as NSString).appendingPathComponent(".claude/agents"),
         ]
 
         watcher = FSEventsWatcher(paths: paths) { [weak self] in
@@ -159,7 +253,7 @@ final class SkillStore: ObservableObject {
         watcher?.start()
     }
 
-    // MARK: - Grouping
+    // MARK: - Grouping (Skills)
 
     private func buildGroups(from skills: [Skill]) -> [SkillGroup] {
         var claudeUserSkills: [Skill] = []
@@ -197,5 +291,27 @@ final class SkillStore: ObservableObject {
         }
 
         return groups
+    }
+
+    // MARK: - Grouping (Agents)
+
+    private func buildAgentGroups(from agents: [Agent]) -> [AgentGroup] {
+        var userAgents: [Agent] = []
+        var pluginAgents: [Agent] = []
+
+        for agent in agents {
+            switch agent.source {
+            case .user: userAgents.append(agent)
+            case .plugin: pluginAgents.append(agent)
+            }
+        }
+
+        let sections = [
+            userAgents.isEmpty ? nil : AgentSection(id: "agent-user", title: "User Agents", agents: userAgents.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
+            pluginAgents.isEmpty ? nil : AgentSection(id: "agent-plugin", title: "Plugin Agents", agents: pluginAgents.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
+        ].compactMap { $0 }
+
+        if sections.isEmpty { return [] }
+        return [AgentGroup(id: "agents", title: "Agents", sections: sections)]
     }
 }

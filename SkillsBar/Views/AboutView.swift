@@ -59,7 +59,8 @@ struct AboutView: View {
                         items: [
                             "~/.claude/skills/",
                             "~/.claude/plugins/cache/",
-                            "~/.codex/skills/"
+                            "~/.codex/skills/",
+                            "~/.claude/agents/"
                         ]
                     )
 
