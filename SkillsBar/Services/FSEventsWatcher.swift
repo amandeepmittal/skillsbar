@@ -3,10 +3,10 @@ import CoreServices
 
 final class FSEventsWatcher {
     private var stream: FSEventStreamRef?
-    private let callback: () -> Void
+    private let callback: ([String]) -> Void
     private let paths: [String]
 
-    init(paths: [String], callback: @escaping () -> Void) {
+    init(paths: [String], callback: @escaping ([String]) -> Void) {
         self.paths = paths.filter { FileManager.default.fileExists(atPath: $0) }
         self.callback = callback
     }
@@ -52,8 +52,8 @@ final class FSEventsWatcher {
         stop()
     }
 
-    fileprivate func handleEvent() {
-        callback()
+    fileprivate func handleEvent(paths: [String]) {
+        callback(paths)
     }
 }
 
@@ -67,7 +67,8 @@ private func fsEventsCallback(
 ) {
     guard let info = clientCallBackInfo else { return }
     let watcher = Unmanaged<FSEventsWatcher>.fromOpaque(info).takeUnretainedValue()
+    let changedPaths = (unsafeBitCast(eventPaths, to: CFArray.self) as? [String]) ?? []
     DispatchQueue.main.async {
-        watcher.handleEvent()
+        watcher.handleEvent(paths: changedPaths)
     }
 }

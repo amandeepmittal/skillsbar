@@ -11,6 +11,8 @@ final class SkillStore: ObservableObject {
     private let scanner = SkillScanner()
     private let agentScanner = AgentScanner()
     private var watcher: FSEventsWatcher?
+    private var watchedRefreshPrefixes: [String] = []
+    private var watchedCreationMarkers: Set<String> = []
 
     private static let pinnedKey = "pinnedSkillPaths"
 
@@ -239,18 +241,89 @@ final class SkillStore: ObservableObject {
     // MARK: - Watching
 
     private func startWatching() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let paths = [
+        watcher?.stop()
+
+        let fileManager = FileManager.default
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        let claudeRoot = (home as NSString).appendingPathComponent(".claude")
+        let codexRoot = (home as NSString).appendingPathComponent(".codex")
+
+        let targetPaths = [
             (home as NSString).appendingPathComponent(".claude/skills"),
             (home as NSString).appendingPathComponent(".claude/plugins/cache"),
-            (home as NSString).appendingPathComponent(".codex/skills"),
             (home as NSString).appendingPathComponent(".claude/agents"),
-        ]
+            (home as NSString).appendingPathComponent(".codex/skills"),
+        ].map { standardizedPath($0) }
 
-        watcher = FSEventsWatcher(paths: paths) { [weak self] in
-            self?.refresh()
+        watchedRefreshPrefixes = targetPaths
+        watchedCreationMarkers = []
+
+        var watchPaths = targetPaths
+
+        let claudeTargets = targetPaths.filter { path($0, isEqualToOrInside: standardizedPath(claudeRoot)) }
+        if claudeTargets.contains(where: { !fileManager.fileExists(atPath: $0) }) {
+            if fileManager.fileExists(atPath: claudeRoot) {
+                watchPaths.append(standardizedPath(claudeRoot))
+            } else {
+                watchPaths.append(standardizedPath(home))
+                watchedCreationMarkers.insert(standardizedPath(claudeRoot))
+            }
+        }
+
+        let codexTargets = targetPaths.filter { path($0, isEqualToOrInside: standardizedPath(codexRoot)) }
+        if codexTargets.contains(where: { !fileManager.fileExists(atPath: $0) }) {
+            if fileManager.fileExists(atPath: codexRoot) {
+                watchPaths.append(standardizedPath(codexRoot))
+            } else {
+                watchPaths.append(standardizedPath(home))
+                watchedCreationMarkers.insert(standardizedPath(codexRoot))
+            }
+        }
+
+        watchPaths = dedupePaths(watchPaths)
+
+        watcher = FSEventsWatcher(paths: watchPaths) { [weak self] changedPaths in
+            guard let self else { return }
+            guard self.shouldRefresh(for: changedPaths) else { return }
+            self.refresh()
         }
         watcher?.start()
+    }
+
+    private func shouldRefresh(for changedPaths: [String]) -> Bool {
+        // Fall back to refreshing if event paths are unavailable.
+        guard !changedPaths.isEmpty else { return true }
+
+        for changedPath in changedPaths.map(standardizedPath) {
+            if watchedCreationMarkers.contains(changedPath) {
+                return true
+            }
+
+            if watchedRefreshPrefixes.contains(where: { path(changedPath, isEqualToOrInside: $0) }) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func standardizedPath(_ path: String) -> String {
+        (path as NSString).standardizingPath
+    }
+
+    private func path(_ path: String, isEqualToOrInside base: String) -> Bool {
+        path == base || path.hasPrefix(base + "/")
+    }
+
+    private func dedupePaths(_ paths: [String]) -> [String] {
+        var seen: Set<String> = []
+        var deduped: [String] = []
+
+        for path in paths.map(standardizedPath) where seen.insert(path).inserted {
+            deduped.append(path)
+        }
+
+        return deduped
     }
 
     // MARK: - Grouping (Skills)

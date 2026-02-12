@@ -133,9 +133,6 @@ final class UsageTracker: ObservableObject {
     // MARK: - Parse Single File
 
     nonisolated private static func parseSessionFile(at path: String) -> [SkillInvocation] {
-        guard let handle = FileHandle(forReadingAtPath: path) else { return [] }
-        defer { handle.closeFile() }
-
         var invocations: [SkillInvocation] = []
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
