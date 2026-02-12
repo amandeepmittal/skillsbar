@@ -8,11 +8,10 @@ final class SkillStore: ObservableObject {
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
 
-    private let scanner = SkillScanner()
-    private let agentScanner = AgentScanner()
     private var watcher: FSEventsWatcher?
     private var watchedRefreshPrefixes: [String] = []
     private var watchedCreationMarkers: Set<String> = []
+    private var refreshGeneration: UInt64 = 0
 
     private static let pinnedKey = "pinnedSkillPaths"
 
@@ -187,11 +186,20 @@ final class SkillStore: ObservableObject {
     }
 
     func refresh() {
-        let skills = scanner.scanAll()
-        groups = buildGroups(from: skills)
+        refreshGeneration += 1
+        let generation = refreshGeneration
 
-        let agents = agentScanner.scanAll()
-        agentGroups = buildAgentGroups(from: agents)
+        Task(priority: .userInitiated) { [weak self] in
+            let scanned = await Task.detached(priority: .userInitiated) {
+                Self.scanSkillsAndAgents()
+            }.value
+
+            guard let self else { return }
+            guard generation == self.refreshGeneration else { return }
+
+            self.groups = self.buildGroups(from: scanned.skills)
+            self.agentGroups = self.buildAgentGroups(from: scanned.agents)
+        }
     }
 
     func deleteSkill(_ skill: Skill) {
@@ -324,6 +332,12 @@ final class SkillStore: ObservableObject {
         }
 
         return deduped
+    }
+
+    nonisolated private static func scanSkillsAndAgents() -> (skills: [Skill], agents: [Agent]) {
+        let skills = SkillScanner().scanAll()
+        let agents = AgentScanner().scanAll()
+        return (skills, agents)
     }
 
     // MARK: - Grouping (Skills)
