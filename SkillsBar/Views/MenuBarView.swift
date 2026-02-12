@@ -286,6 +286,10 @@ struct MenuBarView: View {
                         SkillStore.openInDefaultEditor(skill)
                     }
                     Divider()
+                    Button("Copy Command") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(skill.triggerCommand, forType: .string)
+                    }
                     Button("Copy Path") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(skill.path, forType: .string)
