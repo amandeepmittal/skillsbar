@@ -11,13 +11,13 @@
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/list-view.png" width="320" alt="List view" />
+  <img src="screenshots/list-view.png" width="320" alt="Claude Code skills" />
   &nbsp;&nbsp;
-  <img src="screenshots/pinned-skills.png" width="320" alt="Pinned skills" />
-  &nbsp;&nbsp;
-  <img src="screenshots/detail-view.png" width="320" alt="Detail view" />
+  <img src="screenshots/codex-tab.png" width="320" alt="Codex skills" />
   &nbsp;&nbsp;
   <img src="screenshots/dark-mode.png" width="320" alt="Dark mode" />
+  &nbsp;&nbsp;
+  <img src="screenshots/detail-view.png" width="320" alt="Skill detail view" />
   &nbsp;&nbsp;
   <img src="screenshots/usage-stats.png" width="320" alt="Usage stats" />
 </p>
