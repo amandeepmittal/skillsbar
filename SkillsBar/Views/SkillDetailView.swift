@@ -303,13 +303,28 @@ struct SkillDetailView: View {
 
                             VStack(alignment: .leading, spacing: 4) {
                                 ForEach(skill.folderContents, id: \.self) { file in
+                                    let isDirectory = skill.folderDirectories.contains(file)
                                     HStack(spacing: 6) {
-                                        Image(systemName: fileIcon(for: file))
+                                        Image(systemName: isDirectory ? "folder" : fileIcon(for: file))
                                             .font(.system(size: 11))
                                             .foregroundStyle(.secondary)
                                             .frame(width: 16)
                                         Text(file)
                                             .font(.system(size: 12, design: .monospaced))
+                                    }
+                                    if isDirectory, let children = skill.directoryContents[file], !children.isEmpty {
+                                        ForEach(children, id: \.self) { child in
+                                            HStack(spacing: 6) {
+                                                Image(systemName: fileIcon(for: child))
+                                                    .font(.system(size: 11))
+                                                    .foregroundStyle(.tertiary)
+                                                    .frame(width: 16)
+                                                Text(child)
+                                                    .font(.system(size: 12, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .padding(.leading, 22)
+                                        }
                                     }
                                 }
                             }

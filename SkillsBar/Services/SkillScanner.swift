@@ -123,10 +123,22 @@ struct SkillScanner {
         // File metadata
         let skillDir = (path as NSString).deletingLastPathComponent
         let lastModified = (try? fileManager.attributesOfItem(atPath: path))?[.modificationDate] as? Date
-        let folderContents = (try? fileManager.contentsOfDirectory(atPath: skillDir))?
+        let allItems = (try? fileManager.contentsOfDirectory(atPath: skillDir))?
             .filter { !$0.hasPrefix(".") }
             .sorted() ?? []
+        var directories: Set<String> = []
+        var dirContents: [String: [String]] = [:]
+        for item in allItems {
+            var isDir: ObjCBool = false
+            let itemPath = (skillDir as NSString).appendingPathComponent(item)
+            if fileManager.fileExists(atPath: itemPath, isDirectory: &isDir), isDir.boolValue {
+                directories.insert(item)
+                dirContents[item] = (try? fileManager.contentsOfDirectory(atPath: itemPath))?
+                    .filter { !$0.hasPrefix(".") }
+                    .sorted() ?? []
+            }
+        }
 
-        return Skill(name: name, description: description, source: source, path: path, version: parsed.version, body: parsed.body, lastModified: lastModified, folderContents: folderContents)
+        return Skill(name: name, description: description, source: source, path: path, version: parsed.version, body: parsed.body, lastModified: lastModified, folderContents: allItems, folderDirectories: directories, directoryContents: dirContents)
     }
 }

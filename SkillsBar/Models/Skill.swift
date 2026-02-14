@@ -10,8 +10,10 @@ struct Skill: Identifiable, Hashable {
     var body: String = ""
     var lastModified: Date?
     var folderContents: [String] = []
+    var folderDirectories: Set<String> = []
+    var directoryContents: [String: [String]] = [:]
 
-    init(name: String, description: String, source: SkillSource, path: String, version: String? = nil, body: String = "", lastModified: Date? = nil, folderContents: [String] = []) {
+    init(name: String, description: String, source: SkillSource, path: String, version: String? = nil, body: String = "", lastModified: Date? = nil, folderContents: [String] = [], folderDirectories: Set<String> = [], directoryContents: [String: [String]] = [:]) {
         self.id = path
         self.name = name
         self.description = description
@@ -21,6 +23,8 @@ struct Skill: Identifiable, Hashable {
         self.body = body
         self.lastModified = lastModified
         self.folderContents = folderContents
+        self.folderDirectories = folderDirectories
+        self.directoryContents = directoryContents
     }
 
     var displayName: String {
