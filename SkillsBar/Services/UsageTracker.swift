@@ -75,8 +75,9 @@ final class UsageTracker: ObservableObject {
             withTimeInterval: Self.autoRefreshInterval,
             repeats: true
         ) { [weak self] _ in
+            guard let self else { return }
             Task { @MainActor in
-                self?.refresh()
+                self.refresh()
             }
         }
     }
