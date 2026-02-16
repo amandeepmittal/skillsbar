@@ -18,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             store.start()
             usageTracker.refresh()
+            usageTracker.startAutoRefresh()
         }
 
         // Popover

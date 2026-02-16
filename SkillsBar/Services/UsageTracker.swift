@@ -18,6 +18,9 @@ final class UsageTracker: ObservableObject {
     @Published var isLoading = false
     @Published var lastRefreshDate: Date?
 
+    private var autoRefreshTimer: Timer?
+    private static let autoRefreshInterval: TimeInterval = 12 * 60 * 60 // 12 hours
+
     private let cacheURL: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("SkillsBar")
@@ -64,6 +67,23 @@ final class UsageTracker: ObservableObject {
             }
             await self.saveCache(cache)
         }
+    }
+
+    func startAutoRefresh() {
+        stopAutoRefresh()
+        autoRefreshTimer = Timer.scheduledTimer(
+            withTimeInterval: Self.autoRefreshInterval,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refresh()
+            }
+        }
+    }
+
+    func stopAutoRefresh() {
+        autoRefreshTimer?.invalidate()
+        autoRefreshTimer = nil
     }
 
     // MARK: - Incremental Parse
