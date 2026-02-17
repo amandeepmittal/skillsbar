@@ -13,6 +13,10 @@ struct MenuBarView: View {
     @State private var selectedTab: SkillStore.SkillTab = .claudeCode
     @State private var showAbout = false
     @State private var showUsageStats = false
+    @State private var collapsedSections: Set<String> = {
+        let saved = UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? []
+        return Set(saved)
+    }()
 
     var body: some View {
         Group {
@@ -244,60 +248,83 @@ struct MenuBarView: View {
     // MARK: - Skill Section Card
 
     private func skillSectionCard(group: SkillGroup, section: SkillSection) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if group.sections.count > 1 || group.id == "pinned" {
-                HStack(spacing: 5) {
-                    if group.id == "pinned" {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.yellow)
-                    }
-                    Text(section.title.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .tracking(0.5)
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
-                .padding(.bottom, 4)
-            }
+        let collapsed = isSectionCollapsed(section.id)
+        let showHeader = group.sections.count > 1 || group.id == "pinned"
 
-            ForEach(Array(section.skills.enumerated()), id: \.element.id) { index, skill in
-                if index > 0 {
-                    Divider()
-                        .padding(.leading, 44)
-                }
-                Button(action: { selectedSkill = skill }) {
-                    SkillRowView(
-                        skill: skill,
-                        isPinned: store.isPinned(skill),
-                        usageCount: usageTracker.stat(for: skill.triggerCommand)?.totalCount
-                    )
+        return VStack(alignment: .leading, spacing: 0) {
+            if showHeader {
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { toggleSection(section.id) } }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(collapsed ? 0 : 90))
+                        if group.id == "pinned" {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.yellow)
+                        }
+                        Text(section.title.uppercased())
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .tracking(0.5)
+                        if collapsed {
+                            Text("\(section.skills.count)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .contextMenu {
-                    Button(store.isPinned(skill) ? "Unpin" : "Pin") {
-                        store.togglePin(skill)
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, collapsed ? 8 : 4)
+            }
+
+            if !collapsed || !showHeader {
+                ForEach(Array(section.skills.enumerated()), id: \.element.id) { index, skill in
+                    if index > 0 {
+                        Divider()
+                            .padding(.leading, 44)
                     }
-                    Divider()
-                    Button("Open in VS Code") {
-                        SkillStore.openInVSCode(skill)
+                    Button(action: { selectedSkill = skill }) {
+                        SkillRowView(
+                            skill: skill,
+                            isPinned: store.isPinned(skill),
+                            usageCount: usageTracker.stat(for: skill.triggerCommand)?.totalCount
+                        )
                     }
-                    Button("Open in Default Editor") {
-                        SkillStore.openInDefaultEditor(skill)
-                    }
-                    Divider()
-                    Button("Copy Command") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(skill.triggerCommand, forType: .string)
-                    }
-                    Button("Copy Path") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(skill.path, forType: .string)
-                    }
-                    Divider()
-                    Button("Delete Skill", role: .destructive) {
-                        store.deleteSkill(skill)
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(store.isPinned(skill) ? "Unpin" : "Pin") {
+                            store.togglePin(skill)
+                        }
+                        Divider()
+                        Button("Open in VS Code") {
+                            SkillStore.openInVSCode(skill)
+                        }
+                        Button("Open in Default Editor") {
+                            SkillStore.openInDefaultEditor(skill)
+                        }
+                        Divider()
+                        Button("Copy Command") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(skill.triggerCommand, forType: .string)
+                        }
+                        Button("Copy Path") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(skill.path, forType: .string)
+                        }
+                        Divider()
+                        Button("Delete Skill", role: .destructive) {
+                            store.deleteSkill(skill)
+                        }
                     }
                 }
             }
@@ -309,60 +336,96 @@ struct MenuBarView: View {
     // MARK: - Agent Section Card
 
     private func agentSectionCard(group: AgentGroup, section: AgentSection) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Always show section header for agents so they're distinguishable from skills
-            HStack(spacing: 5) {
-                if group.id == "pinned" {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.yellow)
+        let collapsed = isSectionCollapsed(section.id)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { toggleSection(section.id) } }) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    if group.id == "pinned" {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.yellow)
+                    }
+                    Text(section.title.uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
+                    if collapsed {
+                        Text("\(section.agents.count)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    Spacer()
                 }
-                Text(section.title.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .tracking(0.5)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .padding(.horizontal, 12)
             .padding(.top, 10)
-            .padding(.bottom, 4)
+            .padding(.bottom, collapsed ? 8 : 4)
 
-            ForEach(Array(section.agents.enumerated()), id: \.element.id) { index, agent in
-                if index > 0 {
-                    Divider()
-                        .padding(.leading, 44)
-                }
-                Button(action: { selectedAgent = agent }) {
-                    AgentRowView(
-                        agent: agent,
-                        isPinned: store.isPinnedAgent(agent)
-                    )
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button(store.isPinnedAgent(agent) ? "Unpin" : "Pin") {
-                        store.togglePinAgent(agent)
+            if !collapsed {
+                ForEach(Array(section.agents.enumerated()), id: \.element.id) { index, agent in
+                    if index > 0 {
+                        Divider()
+                            .padding(.leading, 44)
                     }
-                    Divider()
-                    Button("Open in VS Code") {
-                        SkillStore.openAgentInVSCode(agent)
+                    Button(action: { selectedAgent = agent }) {
+                        AgentRowView(
+                            agent: agent,
+                            isPinned: store.isPinnedAgent(agent)
+                        )
                     }
-                    Button("Open in Default Editor") {
-                        SkillStore.openAgentInDefaultEditor(agent)
-                    }
-                    Divider()
-                    Button("Copy Path") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(agent.path, forType: .string)
-                    }
-                    Divider()
-                    Button("Delete Agent", role: .destructive) {
-                        store.deleteAgent(agent)
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(store.isPinnedAgent(agent) ? "Unpin" : "Pin") {
+                            store.togglePinAgent(agent)
+                        }
+                        Divider()
+                        Button("Open in VS Code") {
+                            SkillStore.openAgentInVSCode(agent)
+                        }
+                        Button("Open in Default Editor") {
+                            SkillStore.openAgentInDefaultEditor(agent)
+                        }
+                        Divider()
+                        Button("Copy Path") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(agent.path, forType: .string)
+                        }
+                        Divider()
+                        Button("Delete Agent", role: .destructive) {
+                            store.deleteAgent(agent)
+                        }
                     }
                 }
             }
         }
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    // MARK: - Collapse Helpers
+
+    private func isSectionCollapsed(_ id: String) -> Bool {
+        collapsedSections.contains(id)
+    }
+
+    private func toggleSection(_ id: String) {
+        if collapsedSections.contains(id) {
+            collapsedSections.remove(id)
+        } else {
+            collapsedSections.insert(id)
+        }
+        UserDefaults.standard.set(Array(collapsedSections), forKey: "collapsedSections")
     }
 
     // MARK: - Tab Helpers
