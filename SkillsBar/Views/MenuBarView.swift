@@ -53,6 +53,7 @@ struct MenuBarView: View {
                 mainListView
             }
         }
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var mainListView: some View {
