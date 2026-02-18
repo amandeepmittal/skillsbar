@@ -293,44 +293,61 @@ struct MenuBarView: View {
                         Divider()
                             .padding(.leading, 44)
                     }
-                    Button(action: { selectedSkill = skill }) {
-                        SkillRowView(
-                            skill: skill,
-                            isPinned: store.isPinned(skill),
-                            usageCount: usageTracker.stat(for: skill.triggerCommand)?.totalCount
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button(store.isPinned(skill) ? "Unpin" : "Pin") {
-                            store.togglePin(skill)
-                        }
-                        Divider()
-                        Button("Open in VS Code") {
-                            SkillStore.openInVSCode(skill)
-                        }
-                        Button("Open in Default Editor") {
-                            SkillStore.openInDefaultEditor(skill)
-                        }
-                        Divider()
-                        Button("Copy Command") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(skill.triggerCommand, forType: .string)
-                        }
-                        Button("Copy Path") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(skill.path, forType: .string)
-                        }
-                        Divider()
-                        Button("Delete Skill", role: .destructive) {
-                            store.deleteSkill(skill)
-                        }
-                    }
+                    skillRow(skill: skill, index: index, isPinned: group.id == "pinned", pinnedCount: section.skills.count)
                 }
             }
         }
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private func skillRow(skill: Skill, index: Int, isPinned: Bool, pinnedCount: Int = 0) -> some View {
+        Button(action: { selectedSkill = skill }) {
+            SkillRowView(
+                skill: skill,
+                isPinned: store.isPinned(skill),
+                usageCount: usageTracker.stat(for: skill.triggerCommand)?.totalCount
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(store.isPinned(skill) ? "Unpin" : "Pin") {
+                store.togglePin(skill)
+            }
+            if isPinned && pinnedCount > 1 {
+                Divider()
+                if index > 0 {
+                    Button("Move Up") {
+                        store.movePinnedItem(from: skill.path, toIndex: index - 1)
+                    }
+                }
+                if index < pinnedCount - 1 {
+                    Button("Move Down") {
+                        store.movePinnedItem(from: skill.path, toIndex: index + 1)
+                    }
+                }
+            }
+            Divider()
+            Button("Open in VS Code") {
+                SkillStore.openInVSCode(skill)
+            }
+            Button("Open in Default Editor") {
+                SkillStore.openInDefaultEditor(skill)
+            }
+            Divider()
+            Button("Copy Command") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(skill.triggerCommand, forType: .string)
+            }
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(skill.path, forType: .string)
+            }
+            Divider()
+            Button("Delete Skill", role: .destructive) {
+                store.deleteSkill(skill)
+            }
+        }
     }
 
     // MARK: - Agent Section Card
@@ -378,39 +395,56 @@ struct MenuBarView: View {
                         Divider()
                             .padding(.leading, 44)
                     }
-                    Button(action: { selectedAgent = agent }) {
-                        AgentRowView(
-                            agent: agent,
-                            isPinned: store.isPinnedAgent(agent)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button(store.isPinnedAgent(agent) ? "Unpin" : "Pin") {
-                            store.togglePinAgent(agent)
-                        }
-                        Divider()
-                        Button("Open in VS Code") {
-                            SkillStore.openAgentInVSCode(agent)
-                        }
-                        Button("Open in Default Editor") {
-                            SkillStore.openAgentInDefaultEditor(agent)
-                        }
-                        Divider()
-                        Button("Copy Path") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(agent.path, forType: .string)
-                        }
-                        Divider()
-                        Button("Delete Agent", role: .destructive) {
-                            store.deleteAgent(agent)
-                        }
-                    }
+                    agentRow(agent: agent, index: index, isPinned: group.id == "pinned", pinnedCount: section.agents.count)
                 }
             }
         }
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private func agentRow(agent: Agent, index: Int, isPinned: Bool, pinnedCount: Int = 0) -> some View {
+        Button(action: { selectedAgent = agent }) {
+            AgentRowView(
+                agent: agent,
+                isPinned: store.isPinnedAgent(agent)
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(store.isPinnedAgent(agent) ? "Unpin" : "Pin") {
+                store.togglePinAgent(agent)
+            }
+            if isPinned && pinnedCount > 1 {
+                Divider()
+                if index > 0 {
+                    Button("Move Up") {
+                        store.movePinnedItem(from: agent.path, toIndex: index - 1)
+                    }
+                }
+                if index < pinnedCount - 1 {
+                    Button("Move Down") {
+                        store.movePinnedItem(from: agent.path, toIndex: index + 1)
+                    }
+                }
+            }
+            Divider()
+            Button("Open in VS Code") {
+                SkillStore.openAgentInVSCode(agent)
+            }
+            Button("Open in Default Editor") {
+                SkillStore.openAgentInDefaultEditor(agent)
+            }
+            Divider()
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(agent.path, forType: .string)
+            }
+            Divider()
+            Button("Delete Agent", role: .destructive) {
+                store.deleteAgent(agent)
+            }
+        }
     }
 
     // MARK: - Collapse Helpers

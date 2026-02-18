@@ -7,6 +7,7 @@ final class SkillStore: ObservableObject {
     @Published var agentGroups: [AgentGroup] = []
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
+    @Published var pinnedOrder: [String] = []
     @Published var sortOption: SkillSortOption = .nameAsc {
         didSet {
             guard sortOption != oldValue else { return }
@@ -24,6 +25,7 @@ final class SkillStore: ObservableObject {
     private(set) var usageTracker: UsageTracker?
 
     private static let pinnedKey = "pinnedSkillPaths"
+    private static let pinnedOrderKey = "pinnedSkillOrder"
     private static let sortKey = "skillSortOption"
 
     init(usageTracker: UsageTracker? = nil) {
@@ -35,6 +37,30 @@ final class SkillStore: ObservableObject {
         if let saved = UserDefaults.standard.stringArray(forKey: Self.pinnedKey) {
             pinnedPaths = Set(saved)
         }
+
+        // Load or migrate pinned order
+        if let savedOrder = UserDefaults.standard.stringArray(forKey: Self.pinnedOrderKey) {
+            pinnedOrder = savedOrder.filter { pinnedPaths.contains($0) }
+            let orderSet = Set(pinnedOrder)
+            for path in pinnedPaths where !orderSet.contains(path) {
+                pinnedOrder.append(path)
+            }
+        } else {
+            pinnedOrder = Array(pinnedPaths).sorted()
+        }
+    }
+
+    private func persistPins() {
+        UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
+        UserDefaults.standard.set(pinnedOrder, forKey: Self.pinnedOrderKey)
+    }
+
+    func movePinnedItem(from sourcePath: String, toIndex destinationIndex: Int) {
+        guard let sourceIndex = pinnedOrder.firstIndex(of: sourcePath) else { return }
+        pinnedOrder.remove(at: sourceIndex)
+        let adjustedIndex = min(destinationIndex, pinnedOrder.count)
+        pinnedOrder.insert(sourcePath, at: adjustedIndex)
+        persistPins()
     }
 
     // MARK: - Pinning (Skills)
@@ -46,10 +72,12 @@ final class SkillStore: ObservableObject {
     func togglePin(_ skill: Skill) {
         if pinnedPaths.contains(skill.path) {
             pinnedPaths.remove(skill.path)
+            pinnedOrder.removeAll { $0 == skill.path }
         } else {
             pinnedPaths.insert(skill.path)
+            pinnedOrder.append(skill.path)
         }
-        UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
+        persistPins()
     }
 
     // MARK: - Pinning (Agents)
@@ -61,10 +89,12 @@ final class SkillStore: ObservableObject {
     func togglePinAgent(_ agent: Agent) {
         if pinnedPaths.contains(agent.path) {
             pinnedPaths.remove(agent.path)
+            pinnedOrder.removeAll { $0 == agent.path }
         } else {
             pinnedPaths.insert(agent.path)
+            pinnedOrder.append(agent.path)
         }
-        UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
+        persistPins()
     }
 
     // MARK: - Filtering (Skills)
@@ -103,10 +133,13 @@ final class SkillStore: ObservableObject {
             tabGroups = source.filter { $0.id == "codex-cli" }
         }
 
-        // Build pinned section from skills in this tab
+        // Build pinned section from skills in this tab, preserving custom order
         let allSkills = tabGroups.flatMap { $0.sections.flatMap { $0.skills } }
-        let pinned = allSkills.filter { pinnedPaths.contains($0.path) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let pinnedByPath = Dictionary(
+            allSkills.filter { pinnedPaths.contains($0.path) }.map { ($0.path, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let pinned = pinnedOrder.compactMap { pinnedByPath[$0] }
 
         if !pinned.isEmpty {
             let pinnedPathSet = Set(pinned.map { $0.path })
@@ -151,10 +184,13 @@ final class SkillStore: ObservableObject {
         let source = agentGroupsFiltered
         var tabGroups = source.filter { $0.id == "agents" }
 
-        // Build pinned section from agents
+        // Build pinned section from agents, preserving custom order
         let allAgents = tabGroups.flatMap { $0.sections.flatMap { $0.agents } }
-        let pinned = allAgents.filter { pinnedPaths.contains($0.path) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let pinnedAgentsByPath = Dictionary(
+            allAgents.filter { pinnedPaths.contains($0.path) }.map { ($0.path, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let pinned = pinnedOrder.compactMap { pinnedAgentsByPath[$0] }
 
         if !pinned.isEmpty {
             let pinnedPathSet = Set(pinned.map { $0.path })
@@ -231,7 +267,8 @@ final class SkillStore: ObservableObject {
 
         try? fileManager.removeItem(atPath: skillDir)
         pinnedPaths.remove(skill.path)
-        UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
+        pinnedOrder.removeAll { $0 == skill.path }
+        persistPins()
         refresh()
     }
 
@@ -239,7 +276,8 @@ final class SkillStore: ObservableObject {
         let fileManager = FileManager.default
         try? fileManager.removeItem(atPath: agent.path)
         pinnedPaths.remove(agent.path)
-        UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
+        pinnedOrder.removeAll { $0 == agent.path }
+        persistPins()
         refresh()
     }
 
