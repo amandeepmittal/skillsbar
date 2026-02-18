@@ -7,15 +7,31 @@ final class SkillStore: ObservableObject {
     @Published var agentGroups: [AgentGroup] = []
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
+    @Published var sortOption: SkillSortOption = .nameAsc {
+        didSet {
+            guard sortOption != oldValue else { return }
+            UserDefaults.standard.set(sortOption.rawValue, forKey: Self.sortKey)
+            refreshGroups()
+        }
+    }
 
     private var watcher: FSEventsWatcher?
     private var watchedRefreshPrefixes: [String] = []
     private var watchedCreationMarkers: Set<String> = []
     private var refreshGeneration: UInt64 = 0
+    private var lastScannedSkills: [Skill] = []
+    private var lastScannedAgents: [Agent] = []
+    private(set) var usageTracker: UsageTracker?
 
     private static let pinnedKey = "pinnedSkillPaths"
+    private static let sortKey = "skillSortOption"
 
-    init() {
+    init(usageTracker: UsageTracker? = nil) {
+        self.usageTracker = usageTracker
+        if let raw = UserDefaults.standard.string(forKey: Self.sortKey),
+           let saved = SkillSortOption(rawValue: raw) {
+            self._sortOption = Published(initialValue: saved)
+        }
         if let saved = UserDefaults.standard.stringArray(forKey: Self.pinnedKey) {
             pinnedPaths = Set(saved)
         }
@@ -197,9 +213,16 @@ final class SkillStore: ObservableObject {
             guard let self else { return }
             guard generation == self.refreshGeneration else { return }
 
+            self.lastScannedSkills = scanned.skills
+            self.lastScannedAgents = scanned.agents
             self.groups = self.buildGroups(from: scanned.skills)
             self.agentGroups = self.buildAgentGroups(from: scanned.agents)
         }
+    }
+
+    private func refreshGroups() {
+        guard !lastScannedSkills.isEmpty else { return }
+        groups = buildGroups(from: lastScannedSkills)
     }
 
     func deleteSkill(_ skill: Skill) {
@@ -342,6 +365,33 @@ final class SkillStore: ObservableObject {
 
     // MARK: - Grouping (Skills)
 
+    private func sortSkills(_ skills: [Skill]) -> [Skill] {
+        switch sortOption {
+        case .nameAsc:
+            return skills.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .recentlyModified:
+            return skills.sorted { a, b in
+                switch (a.lastModified, b.lastModified) {
+                case let (aDate?, bDate?):
+                    return aDate > bDate
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                }
+            }
+        case .mostUsed:
+            return skills.sorted { a, b in
+                let aCount = usageTracker?.stat(for: a.triggerCommand)?.totalCount ?? 0
+                let bCount = usageTracker?.stat(for: b.triggerCommand)?.totalCount ?? 0
+                if aCount != bCount { return aCount > bCount }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
+        }
+    }
+
     private func buildGroups(from skills: [Skill]) -> [SkillGroup] {
         var claudeUserSkills: [Skill] = []
         var claudePluginSkills: [Skill] = []
@@ -360,8 +410,8 @@ final class SkillStore: ObservableObject {
         var groups: [SkillGroup] = []
 
         let claudeSections = [
-            claudeUserSkills.isEmpty ? nil : SkillSection(id: "claude-user", title: "User Skills", skills: claudeUserSkills.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
-            claudePluginSkills.isEmpty ? nil : SkillSection(id: "claude-plugin", title: "Plugin Skills", skills: claudePluginSkills.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
+            claudeUserSkills.isEmpty ? nil : SkillSection(id: "claude-user", title: "User Skills", skills: sortSkills(claudeUserSkills)),
+            claudePluginSkills.isEmpty ? nil : SkillSection(id: "claude-plugin", title: "Plugin Skills", skills: sortSkills(claudePluginSkills)),
         ].compactMap { $0 }
 
         if !claudeSections.isEmpty {
@@ -369,8 +419,8 @@ final class SkillStore: ObservableObject {
         }
 
         let codexSections = [
-            codexUserSkills.isEmpty ? nil : SkillSection(id: "codex-user", title: "User Skills", skills: codexUserSkills.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
-            codexBuiltinSkills.isEmpty ? nil : SkillSection(id: "codex-builtin", title: "Built-in Skills", skills: codexBuiltinSkills.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
+            codexUserSkills.isEmpty ? nil : SkillSection(id: "codex-user", title: "User Skills", skills: sortSkills(codexUserSkills)),
+            codexBuiltinSkills.isEmpty ? nil : SkillSection(id: "codex-builtin", title: "Built-in Skills", skills: sortSkills(codexBuiltinSkills)),
         ].compactMap { $0 }
 
         if !codexSections.isEmpty {

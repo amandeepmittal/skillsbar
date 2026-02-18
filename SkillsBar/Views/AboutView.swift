@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AboutView: View {
+    @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
 
     var body: some View {
@@ -69,6 +70,8 @@ struct AboutView: View {
                         title: "Keyboard Shortcut",
                         items: ["Option + Shift + S"]
                     )
+
+                    sortCard
                 }
                 .padding(.horizontal, 20)
 
@@ -110,7 +113,33 @@ struct AboutView: View {
                 .padding(.bottom, 16)
             }
         }
-        .frame(width: 440, height: 620)
+        .frame(width: 440, height: 720)
+    }
+
+    private var sortCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Text("DEFAULT SORT")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+            }
+
+            Picker("", selection: $skillStore.sortOption) {
+                ForEach(SkillSortOption.allCases, id: \.self) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func infoCard(icon: String, title: String, items: [String]) -> some View {

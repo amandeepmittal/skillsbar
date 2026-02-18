@@ -21,7 +21,7 @@ struct MenuBarView: View {
     var body: some View {
         Group {
             if showAbout {
-                AboutView(onBack: { showAbout = false })
+                AboutView(skillStore: store, onBack: { showAbout = false })
             } else if showUsageStats {
                 UsageStatsView(
                     usageTracker: usageTracker,

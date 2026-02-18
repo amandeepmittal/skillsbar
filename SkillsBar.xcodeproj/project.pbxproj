@@ -31,6 +31,7 @@
 		A10001022 /* SkillUsageStat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002023; };
 		A10001023 /* UsageTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002024; };
 		A10001024 /* UsageStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002025; };
+		A10001025 /* SkillSortOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002026; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 		A10002023 /* SkillUsageStat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillUsageStat.swift; sourceTree = "<group>"; };
 		A10002024 /* UsageTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageTracker.swift; sourceTree = "<group>"; };
 		A10002025 /* UsageStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStatsView.swift; sourceTree = "<group>"; };
+		A10002026 /* SkillSortOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillSortOption.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +107,7 @@
 				A10002018 /* AgentSource.swift */,
 				A10002019 /* AgentGroup.swift */,
 				A10002023 /* SkillUsageStat.swift */,
+				A10002026 /* SkillSortOption.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -237,6 +240,7 @@
 				A10001022 /* SkillUsageStat.swift in Sources */,
 				A10001023 /* UsageTracker.swift in Sources */,
 				A10001024 /* UsageStatsView.swift in Sources */,
+				A10001025 /* SkillSortOption.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

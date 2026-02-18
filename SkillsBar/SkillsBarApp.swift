@@ -6,8 +6,15 @@ import Carbon.HIToolbox
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
-    private let store = SkillStore()
-    private let usageTracker = UsageTracker()
+    private let store: SkillStore
+    private let usageTracker: UsageTracker
+
+    override init() {
+        let tracker = UsageTracker()
+        self.usageTracker = tracker
+        self.store = SkillStore(usageTracker: tracker)
+        super.init()
+    }
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
 
