@@ -40,7 +40,7 @@ struct AboutView: View {
                 VStack(spacing: 4) {
                     Text("SkillsBar")
                         .font(.system(size: 22, weight: .bold))
-                    Text("Version 1.2.5")
+                    Text("Version 1.3.0")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
