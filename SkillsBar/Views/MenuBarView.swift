@@ -17,6 +17,19 @@ struct MenuBarView: View {
         let saved = UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? []
         return Set(saved)
     }()
+    @State private var highlightedItemId: String?
+    @State private var keyMonitor: Any?
+
+    private enum ListItem {
+        case skill(Skill)
+        case agent(Agent)
+        var id: String {
+            switch self {
+            case .skill(let s): return s.id
+            case .agent(let a): return a.id
+            }
+        }
+    }
 
     var body: some View {
         Group {
@@ -58,6 +71,10 @@ struct MenuBarView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear { installKeyboardMonitor() }
+        .onDisappear { removeKeyboardMonitor() }
+        .onChange(of: selectedTab) { _, _ in highlightedItemId = nil }
+        .onChange(of: store.searchText) { _, _ in highlightedItemId = nil }
     }
 
     private var mainListView: some View {
@@ -186,61 +203,70 @@ struct MenuBarView: View {
             if !hasContent {
                 emptyStateView
             } else {
-                ScrollView {
-                    VStack(spacing: 8) {
-                        if selectedTab == .claudeCode {
-                            // Pinned sections first
-                            ForEach(tabGroups.filter { $0.id == "pinned" }) { group in
-                                ForEach(group.sections) { section in
-                                    skillSectionCard(group: group, section: section)
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            if selectedTab == .claudeCode {
+                                // Pinned sections first
+                                ForEach(tabGroups.filter { $0.id == "pinned" }) { group in
+                                    ForEach(group.sections) { section in
+                                        skillSectionCard(group: group, section: section)
+                                    }
                                 }
-                            }
-                            ForEach(agentGroups.filter { $0.id == "pinned" }) { group in
-                                ForEach(group.sections) { section in
-                                    agentSectionCard(group: group, section: section)
+                                ForEach(agentGroups.filter { $0.id == "pinned" }) { group in
+                                    ForEach(group.sections) { section in
+                                        agentSectionCard(group: group, section: section)
+                                    }
                                 }
-                            }
 
-                            // User Skills
-                            ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
-                                ForEach(group.sections.filter { $0.id == "claude-user" }) { section in
-                                    skillSectionCard(group: group, section: section)
+                                // User Skills
+                                ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id == "claude-user" }) { section in
+                                        skillSectionCard(group: group, section: section)
+                                    }
                                 }
-                            }
 
-                            // User Agents
-                            ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
-                                ForEach(group.sections.filter { $0.id == "agent-user" }) { section in
-                                    agentSectionCard(group: group, section: section)
+                                // User Agents
+                                ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id == "agent-user" }) { section in
+                                        agentSectionCard(group: group, section: section)
+                                    }
                                 }
-                            }
 
-                            // Plugin Skills
-                            ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
-                                ForEach(group.sections.filter { $0.id == "claude-plugin" }) { section in
-                                    skillSectionCard(group: group, section: section)
+                                // Plugin Skills
+                                ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id == "claude-plugin" }) { section in
+                                        skillSectionCard(group: group, section: section)
+                                    }
                                 }
-                            }
 
-                            // Plugin Agents
-                            ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
-                                ForEach(group.sections.filter { $0.id == "agent-plugin" }) { section in
-                                    agentSectionCard(group: group, section: section)
+                                // Plugin Agents
+                                ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id == "agent-plugin" }) { section in
+                                        agentSectionCard(group: group, section: section)
+                                    }
                                 }
-                            }
-                        } else {
-                            // Codex tab - just skills
-                            ForEach(tabGroups) { group in
-                                ForEach(group.sections) { section in
-                                    skillSectionCard(group: group, section: section)
+                            } else {
+                                // Codex tab - just skills
+                                ForEach(tabGroups) { group in
+                                    ForEach(group.sections) { section in
+                                        skillSectionCard(group: group, section: section)
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
+                    .frame(maxHeight: 600)
+                    .onChange(of: highlightedItemId) { _, newValue in
+                        if let id = newValue {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                scrollProxy.scrollTo(id, anchor: .center)
+                            }
+                        }
+                    }
                 }
-                .frame(maxHeight: 600)
             }
         }
     }
@@ -310,6 +336,8 @@ struct MenuBarView: View {
             )
         }
         .buttonStyle(.plain)
+        .background(highlightedItemId == skill.id ? Color.accentColor.opacity(0.12) : Color.clear)
+        .id(skill.id)
         .contextMenu {
             Button(store.isPinned(skill) ? "Unpin" : "Pin") {
                 store.togglePin(skill)
@@ -411,6 +439,8 @@ struct MenuBarView: View {
             )
         }
         .buttonStyle(.plain)
+        .background(highlightedItemId == agent.id ? Color.accentColor.opacity(0.12) : Color.clear)
+        .id(agent.id)
         .contextMenu {
             Button(store.isPinnedAgent(agent) ? "Unpin" : "Pin") {
                 store.togglePinAgent(agent)
@@ -554,6 +584,134 @@ struct MenuBarView: View {
         case .codex:
             return "~/.codex/skills/"
         }
+    }
+
+    // MARK: - Keyboard Navigation
+
+    private var flatVisibleItems: [ListItem] {
+        var items: [ListItem] = []
+        let tabGroups = store.groupsForTab(selectedTab)
+        let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
+
+        func addSkills(from groups: [SkillGroup], groupFilter: (SkillGroup) -> Bool, sectionFilter: ((SkillSection) -> Bool)? = nil) {
+            for group in groups where groupFilter(group) {
+                let sections = sectionFilter != nil ? group.sections.filter(sectionFilter!) : group.sections
+                for section in sections {
+                    let showHeader = group.sections.count > 1 || group.id == "pinned"
+                    if !isSectionCollapsed(section.id) || !showHeader {
+                        items.append(contentsOf: section.skills.map { .skill($0) })
+                    }
+                }
+            }
+        }
+
+        func addAgents(from groups: [AgentGroup], groupFilter: (AgentGroup) -> Bool, sectionFilter: ((AgentSection) -> Bool)? = nil) {
+            for group in groups where groupFilter(group) {
+                let sections = sectionFilter != nil ? group.sections.filter(sectionFilter!) : group.sections
+                for section in sections {
+                    if !isSectionCollapsed(section.id) {
+                        items.append(contentsOf: section.agents.map { .agent($0) })
+                    }
+                }
+            }
+        }
+
+        if selectedTab == .claudeCode {
+            addSkills(from: tabGroups, groupFilter: { $0.id == "pinned" })
+            addAgents(from: agentGroups, groupFilter: { $0.id == "pinned" })
+            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-user" })
+            addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-user" })
+            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-plugin" })
+            addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-plugin" })
+        } else {
+            addSkills(from: tabGroups, groupFilter: { _ in true })
+        }
+
+        return items
+    }
+
+    private func installKeyboardMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+            handleKeyEvent(event)
+        }
+    }
+
+    private func removeKeyboardMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
+    }
+
+    private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
+        let isOnMainList = selectedSkill == nil && selectedAgent == nil && !showAbout && !showUsageStats
+
+        switch Int(event.keyCode) {
+        case 125: // Down arrow
+            guard isOnMainList else { return event }
+            moveHighlight(by: 1)
+            return nil
+        case 126: // Up arrow
+            guard isOnMainList else { return event }
+            moveHighlight(by: -1)
+            return nil
+        case 36: // Return
+            guard isOnMainList, highlightedItemId != nil else { return event }
+            openHighlightedItem()
+            return nil
+        case 53: // Escape
+            return handleEscape() ? nil : event
+        default:
+            return event
+        }
+    }
+
+    private func moveHighlight(by offset: Int) {
+        let items = flatVisibleItems
+        guard !items.isEmpty else { return }
+
+        if let currentId = highlightedItemId,
+           let currentIndex = items.firstIndex(where: { $0.id == currentId }) {
+            let newIndex = max(0, min(items.count - 1, currentIndex + offset))
+            highlightedItemId = items[newIndex].id
+        } else {
+            highlightedItemId = offset > 0 ? items.first?.id : items.last?.id
+        }
+    }
+
+    private func openHighlightedItem() {
+        guard let id = highlightedItemId else { return }
+        let items = flatVisibleItems
+        guard let item = items.first(where: { $0.id == id }) else { return }
+        switch item {
+        case .skill(let skill): selectedSkill = skill
+        case .agent(let agent): selectedAgent = agent
+        }
+    }
+
+    private func handleEscape() -> Bool {
+        if selectedSkill != nil {
+            selectedSkill = nil
+            return true
+        }
+        if selectedAgent != nil {
+            selectedAgent = nil
+            return true
+        }
+        if showAbout {
+            showAbout = false
+            return true
+        }
+        if showUsageStats {
+            showUsageStats = false
+            return true
+        }
+        if !store.searchText.isEmpty {
+            store.searchText = ""
+            return true
+        }
+        return false
     }
 
     private var installedSkillTriggerNames: Set<String> {
