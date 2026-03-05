@@ -21,8 +21,13 @@ final class UsageTracker: ObservableObject {
     private var autoRefreshTimer: Timer?
     private static let autoRefreshInterval: TimeInterval = 12 * 60 * 60 // 12 hours
 
+    deinit {
+        autoRefreshTimer?.invalidate()
+    }
+
     private let cacheURL: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
         let dir = appSupport.appendingPathComponent("SkillsBar")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("usage-cache.json")
