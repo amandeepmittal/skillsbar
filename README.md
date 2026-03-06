@@ -8,6 +8,10 @@
   A macOS menu bar app for browsing and managing your <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> and <a href="https://github.com/openai/codex">Codex CLI</a> skills and agents.
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/github/downloads/amandeepmittal/skillsbar/total?style=flat-square&label=downloads" alt="GitHub Downloads" />
+</p>
+
 ## Screenshots
 
 <p align="center">
