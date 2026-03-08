@@ -71,7 +71,10 @@ struct MenuBarView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear { installKeyboardMonitor() }
+        .onAppear {
+            highlightedItemId = nil
+            installKeyboardMonitor()
+        }
         .onDisappear { removeKeyboardMonitor() }
         .onChange(of: selectedTab) { _, _ in highlightedItemId = nil }
         .onChange(of: store.searchText) { _, _ in highlightedItemId = nil }
@@ -337,6 +340,9 @@ struct MenuBarView: View {
         }
         .buttonStyle(.plain)
         .background(highlightedItemId == skill.id ? Color.accentColor.opacity(0.12) : Color.clear)
+        .onHover { hovering in
+            if hovering { highlightedItemId = nil }
+        }
         .id(skill.id)
         .contextMenu {
             Button(store.isPinned(skill) ? "Unpin" : "Pin") {
@@ -440,6 +446,9 @@ struct MenuBarView: View {
         }
         .buttonStyle(.plain)
         .background(highlightedItemId == agent.id ? Color.accentColor.opacity(0.12) : Color.clear)
+        .onHover { hovering in
+            if hovering { highlightedItemId = nil }
+        }
         .id(agent.id)
         .contextMenu {
             Button(store.isPinnedAgent(agent) ? "Unpin" : "Pin") {
