@@ -277,7 +277,7 @@ struct AgentDetailView: View {
                 .padding(14)
             }
         }
-        .frame(width: 440, height: 620)
+        .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.detailHeight)
         .alert("Delete Agent", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {

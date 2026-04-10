@@ -30,7 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Popover
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 440, height: 650)
+        popover.contentSize = NSSize(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.popoverHeight)
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(

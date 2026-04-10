@@ -4,6 +4,7 @@ struct SkillRowView: View {
     let skill: Skill
     let isPinned: Bool
     var usageCount: Int? = nil
+    var showSourceBadge = false
     @State private var isHovered = false
 
     private var hoverColor: Color {
@@ -26,6 +27,15 @@ struct SkillRowView: View {
                     Text(skill.displayName)
                         .font(.system(size: 14, weight: .medium))
                         .lineLimit(1)
+                    if showSourceBadge {
+                        Text(skill.source.groupTitle == "Claude Code" ? "Claude" : "Codex")
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(hoverColor.opacity(0.14))
+                            .foregroundStyle(hoverColor)
+                            .clipShape(Capsule())
+                    }
                     if skill.isNew {
                         Text("NEW")
                             .font(.system(size: 9, weight: .bold))

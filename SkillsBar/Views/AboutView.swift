@@ -114,7 +114,7 @@ struct AboutView: View {
                 .padding(.bottom, 16)
             }
         }
-        .frame(width: 440, height: 720)
+        .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.aboutHeight)
     }
 
     private var sortCard: some View {

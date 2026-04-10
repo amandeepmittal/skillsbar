@@ -2,6 +2,7 @@ import SwiftUI
 
 private let claudeColor = Color(red: 0.85, green: 0.45, blue: 0.1)
 private let codexColor = Color.purple
+private let collectionsColor = Color.blue
 private let cardBackground = Color.primary.opacity(0.10)
 private let cardRadius: CGFloat = 12
 
@@ -19,6 +20,11 @@ struct MenuBarView: View {
     }()
     @State private var highlightedItemId: String?
     @State private var keyMonitor: Any?
+    @State private var showingNewCollectionForm = false
+    @State private var newCollectionName = ""
+    @State private var pendingCollectionSkillPath: String?
+    @State private var editingCollectionID: UUID?
+    @State private var editingCollectionName = ""
 
     private enum ListItem {
         case skill(Skill)
@@ -58,12 +64,20 @@ struct MenuBarView: View {
                     skill: skill,
                     isPinned: store.isPinned(skill),
                     usageStat: usageTracker.stat(for: skill),
+                    collections: store.collections,
+                    skillCollections: store.collections(for: skill),
                     onBack: { selectedSkill = nil },
                     onDelete: { skill in
                         store.deleteSkill(skill)
                     },
                     onTogglePin: { skill in
                         store.togglePin(skill)
+                    },
+                    onToggleCollectionMembership: { collection in
+                        store.toggleSkill(skill, in: collection)
+                    },
+                    onCreateCollection: { skill in
+                        startCreatingCollection(for: skill)
                     }
                 )
             } else {
@@ -76,7 +90,14 @@ struct MenuBarView: View {
             installKeyboardMonitor()
         }
         .onDisappear { removeKeyboardMonitor() }
-        .onChange(of: selectedTab) { _, _ in highlightedItemId = nil }
+        .onChange(of: selectedTab) { _, newTab in
+            highlightedItemId = nil
+            if newTab != .collections {
+                resetCollectionComposer()
+                editingCollectionID = nil
+                editingCollectionName = ""
+            }
+        }
         .onChange(of: store.searchText) { _, _ in highlightedItemId = nil }
     }
 
@@ -111,7 +132,7 @@ struct MenuBarView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.tertiary)
                     .font(.system(size: 14))
-                TextField("Search skills...", text: $store.searchText)
+                TextField(searchPlaceholder, text: $store.searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
                 if !store.searchText.isEmpty {
@@ -192,17 +213,21 @@ struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
         }
-        .frame(width: 440)
+        .frame(width: SkillsBarLayout.windowWidth)
     }
 
     // MARK: - Content List
 
     private var contentListView: some View {
+        if selectedTab == .collections {
+            return AnyView(collectionsListView)
+        }
+
         let tabGroups = store.groupsForTab(selectedTab)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
         let hasContent = !tabGroups.isEmpty || !agentGroups.isEmpty
 
-        return Group {
+        return AnyView(Group {
             if !hasContent {
                 emptyStateView
             } else {
@@ -261,7 +286,7 @@ struct MenuBarView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 4)
                     }
-                    .frame(maxHeight: 600)
+                    .frame(maxHeight: SkillsBarLayout.mainScrollHeight)
                     .onChange(of: highlightedItemId) { _, newValue in
                         if let id = newValue {
                             withAnimation(.easeInOut(duration: 0.15)) {
@@ -271,7 +296,7 @@ struct MenuBarView: View {
                     }
                 }
             }
-        }
+        })
     }
 
     // MARK: - Skill Section Card
@@ -335,7 +360,8 @@ struct MenuBarView: View {
             SkillRowView(
                 skill: skill,
                 isPinned: store.isPinned(skill),
-                usageCount: usageTracker.stat(for: skill)?.totalCount
+                usageCount: usageTracker.stat(for: skill)?.totalCount,
+                showSourceBadge: selectedTab == .collections
             )
         }
         .buttonStyle(.plain)
@@ -362,6 +388,29 @@ struct MenuBarView: View {
                 }
             }
             Divider()
+            if store.collections.isEmpty {
+                Button("New Collection…") {
+                    startCreatingCollection(for: skill)
+                }
+                Divider()
+            } else {
+                Menu("Collections") {
+                    ForEach(store.collections) { collection in
+                        Button(
+                            store.isSkill(skill, in: collection)
+                                ? "Remove from \(collection.name)"
+                                : "Add to \(collection.name)"
+                        ) {
+                            store.toggleSkill(skill, in: collection)
+                        }
+                    }
+                    Divider()
+                    Button("New Collection…") {
+                        startCreatingCollection(for: skill)
+                    }
+                }
+                Divider()
+            }
             Button("Open in VS Code") {
                 SkillStore.openInVSCode(skill)
             }
@@ -382,6 +431,292 @@ struct MenuBarView: View {
                 store.deleteSkill(skill)
             }
         }
+    }
+
+    // MARK: - Collections
+
+    private var collectionsListView: some View {
+        let resolvedCollections = store.resolvedCollections(searchText: store.searchText)
+        let hasCollections = !store.collections.isEmpty
+
+        return ScrollViewReader { scrollProxy in
+            ScrollView {
+                VStack(spacing: 8) {
+                    collectionComposerCard
+
+                    if !hasCollections {
+                        collectionsEmptyStateView
+                    } else if resolvedCollections.isEmpty {
+                        collectionsSearchEmptyStateView
+                    } else {
+                        ForEach(resolvedCollections) { resolvedCollection in
+                            collectionSectionCard(resolvedCollection)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+            }
+            .frame(maxHeight: SkillsBarLayout.mainScrollHeight)
+            .onChange(of: highlightedItemId) { _, newValue in
+                if let id = newValue {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        scrollProxy.scrollTo(id, anchor: .center)
+                    }
+                }
+            }
+        }
+    }
+
+    private var collectionComposerCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("COLLECTIONS")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+                Spacer()
+                if !showingNewCollectionForm {
+                    Button {
+                        showingNewCollectionForm = true
+                        if newCollectionName.isEmpty {
+                            newCollectionName = "New Collection"
+                        }
+                    } label: {
+                        Label("New Collection", systemImage: "plus")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.blue)
+                }
+            }
+
+            if showingNewCollectionForm {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Collection name", text: $newCollectionName)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(commitNewCollection)
+
+                    if let pendingSkill = pendingCollectionSkill {
+                        Text("\"\(pendingSkill.displayName)\" will be added after creation.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Mix Claude Code and Codex skills into one saved list.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button("Create", action: commitNewCollection)
+                            .keyboardShortcut(.defaultAction)
+                        Button("Cancel", action: resetCollectionComposer)
+                    }
+                }
+            } else {
+                Text("Build custom sets like Docs, Release, or Debugging across Claude Code and Codex.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private func collectionSectionCard(_ resolvedCollection: ResolvedSkillCollection) -> some View {
+        let collection = resolvedCollection.collection
+        let sectionID = collectionSectionID(for: collection)
+        let collapsed = isSectionCollapsed(sectionID)
+        let isEditing = editingCollectionID == collection.id
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                if isEditing {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(collapsed ? 0 : 90))
+                        TextField("Collection name", text: $editingCollectionName)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { commitRenameCollection(collection) }
+                        countBadge("\(resolvedCollection.skills.count)")
+                        if resolvedCollection.missingCount > 0 {
+                            countBadge("\(resolvedCollection.missingCount) missing", secondary: true)
+                        }
+                        Spacer()
+                    }
+                } else {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { toggleSection(sectionID) } }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                                .rotationEffect(.degrees(collapsed ? 0 : 90))
+                            Text(collection.name.uppercased())
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+                            countBadge("\(resolvedCollection.skills.count)")
+                            if resolvedCollection.missingCount > 0 {
+                                countBadge("\(resolvedCollection.missingCount) missing", secondary: true)
+                            }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if isEditing {
+                    Button("Save") {
+                        commitRenameCollection(collection)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.blue)
+
+                    Button("Cancel") {
+                        editingCollectionID = nil
+                        editingCollectionName = ""
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Menu {
+                        Button("Rename") {
+                            editingCollectionID = collection.id
+                            editingCollectionName = collection.name
+                        }
+                        Button("Delete Collection", role: .destructive) {
+                            store.deleteCollection(collection)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, collapsed ? 10 : 6)
+
+            if !collapsed {
+                if resolvedCollection.skills.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("No available skills in this collection right now.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                        if resolvedCollection.missingCount > 0 {
+                            Text("Some saved skills could not be resolved from the current scan.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+                } else {
+                    ForEach(Array(resolvedCollection.skills.enumerated()), id: \.element.id) { index, skill in
+                        if index > 0 {
+                            Divider()
+                                .padding(.leading, 44)
+                        }
+                        skillRow(skill: skill, index: index, isPinned: false)
+                    }
+                }
+            }
+        }
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private var collectionsEmptyStateView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "square.stack.3d.up")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+            Text("No collections yet")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+            Text("Create a collection to group Claude Code and Codex skills together.")
+                .font(.system(size: 12))
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private var collectionsSearchEmptyStateView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+            Text("No matching collections")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+            Text("Try a collection name, skill name, or trigger command.")
+                .font(.system(size: 12))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private var pendingCollectionSkill: Skill? {
+        guard let pendingCollectionSkillPath else { return nil }
+        return store.skill(forPath: pendingCollectionSkillPath)
+    }
+
+    private func startCreatingCollection(for skill: Skill? = nil) {
+        selectedSkill = nil
+        selectedAgent = nil
+        showAbout = false
+        showUsageStats = false
+        selectedTab = .collections
+        showingNewCollectionForm = true
+        newCollectionName = skill.map { "\($0.displayName)" } ?? "New Collection"
+        pendingCollectionSkillPath = skill?.path
+    }
+
+    private func resetCollectionComposer() {
+        showingNewCollectionForm = false
+        newCollectionName = ""
+        pendingCollectionSkillPath = nil
+    }
+
+    private func commitNewCollection() {
+        let skill = pendingCollectionSkill
+        _ = store.createCollection(named: newCollectionName, including: skill)
+        resetCollectionComposer()
+    }
+
+    private func commitRenameCollection(_ collection: SkillCollection) {
+        store.renameCollection(collection, to: editingCollectionName)
+        editingCollectionID = nil
+        editingCollectionName = ""
+    }
+
+    private func collectionSectionID(for collection: SkillCollection) -> String {
+        "collection-\(collection.id.uuidString)"
+    }
+
+    private func countBadge(_ text: String, secondary: Bool = false) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(secondary ? .tertiary : .secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Color.secondary.opacity(secondary ? 0.08 : 0.12))
+            .clipShape(Capsule())
     }
 
     // MARK: - Agent Section Card
@@ -507,6 +842,7 @@ struct MenuBarView: View {
         switch tab {
         case .claudeCode: return claudeColor
         case .codex: return codexColor
+        case .collections: return collectionsColor
         }
     }
 
@@ -583,6 +919,8 @@ struct MenuBarView: View {
             return "Create a skill folder with a SKILL.md file in:"
         case .codex:
             return "Install skills or create a folder with SKILL.md in:"
+        case .collections:
+            return "Create a collection to group skills across Claude Code and Codex."
         }
     }
 
@@ -592,6 +930,17 @@ struct MenuBarView: View {
             return "~/.claude/skills/"
         case .codex:
             return "~/.codex/skills/"
+        case .collections:
+            return "Use the New Collection button above."
+        }
+    }
+
+    private var searchPlaceholder: String {
+        switch selectedTab {
+        case .collections:
+            return "Search collections or skills..."
+        case .claudeCode, .codex:
+            return "Search skills..."
         }
     }
 
@@ -599,6 +948,16 @@ struct MenuBarView: View {
 
     private var flatVisibleItems: [ListItem] {
         var items: [ListItem] = []
+        if selectedTab == .collections {
+            for resolvedCollection in store.resolvedCollections(searchText: store.searchText) {
+                let sectionID = collectionSectionID(for: resolvedCollection.collection)
+                if !isSectionCollapsed(sectionID) {
+                    items.append(contentsOf: resolvedCollection.skills.map { .skill($0) })
+                }
+            }
+            return items
+        }
+
         let tabGroups = store.groupsForTab(selectedTab)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
 

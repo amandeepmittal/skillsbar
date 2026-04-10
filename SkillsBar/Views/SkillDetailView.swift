@@ -4,9 +4,13 @@ struct SkillDetailView: View {
     let skill: Skill
     let isPinned: Bool
     var usageStat: SkillUsageStat? = nil
+    let collections: [SkillCollection]
+    let skillCollections: [SkillCollection]
     let onBack: () -> Void
     let onDelete: (Skill) -> Void
     let onTogglePin: (Skill) -> Void
+    let onToggleCollectionMembership: (SkillCollection) -> Void
+    let onCreateCollection: (Skill) -> Void
 
     @State private var showDeleteConfirmation = false
     @State private var showFullContent = false
@@ -258,6 +262,66 @@ struct SkillDetailView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
 
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("COLLECTIONS")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+                            Spacer()
+                            Menu {
+                                if collections.isEmpty {
+                                    Button("No collections yet") {}
+                                        .disabled(true)
+                                } else {
+                                    ForEach(collections) { collection in
+                                        Button(
+                                            skillCollections.contains(collection)
+                                                ? "Remove from \(collection.name)"
+                                                : "Add to \(collection.name)"
+                                        ) {
+                                            onToggleCollectionMembership(collection)
+                                        }
+                                    }
+                                }
+                                Divider()
+                                Button("New Collection…") {
+                                    onCreateCollection(skill)
+                                }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "square.stack.3d.up")
+                                        .font(.system(size: 12))
+                                    Text("Manage")
+                                        .font(.system(size: 12, weight: .medium))
+                                }
+                                .foregroundStyle(.secondary)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                        }
+
+                        if skillCollections.isEmpty {
+                            Text("Not in any collections yet.")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], alignment: .leading, spacing: 8) {
+                                ForEach(skillCollections) { collection in
+                                    collectionBadge(collection.name)
+                                }
+                            }
+                        }
+
+                        Text("Collections can mix Claude Code and Codex skills.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(cardBg)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
                     // Full content preview card
                     if !skill.body.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -338,7 +402,7 @@ struct SkillDetailView: View {
                 .padding(14)
             }
         }
-        .frame(width: 440, height: 620)
+        .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.detailHeight)
         .alert("Delete Skill", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
@@ -367,6 +431,18 @@ struct SkillDetailView: View {
             .padding(.vertical, 4)
             .background(color.opacity(0.15))
             .foregroundStyle(color)
+            .clipShape(Capsule())
+    }
+
+    private func collectionBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.blue.opacity(0.12))
+            .foregroundStyle(.blue)
             .clipShape(Capsule())
     }
 

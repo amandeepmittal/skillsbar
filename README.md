@@ -5,7 +5,7 @@
 <h1 align="center">SkillsBar</h1>
 
 <p align="center">
-  A macOS menu bar app for browsing and managing your <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> and <a href="https://github.com/openai/codex">Codex CLI</a> skills and agents.
+  A macOS menu bar app for browsing and managing your <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> and <a href="https://github.com/openai/codex">Codex CLI</a> skills, collections, and agents.
 </p>
 
 <p align="center">
@@ -26,20 +26,27 @@
   <img src="screenshots/usage-stats.png" width="320" alt="Usage stats" />
   &nbsp;&nbsp;
   <img src="screenshots/about-view.png" width="320" alt="About view with sort options" />
+  &nbsp;&nbsp;
+  <img src="screenshots/collections-1.png" width="320" alt="Collections view" />
+  &nbsp;&nbsp;
+  <img src="screenshots/collections-2.png" width="320" alt="Collection detail view" />
+  &nbsp;&nbsp;
+  <img src="screenshots/collections-3.png" width="320" alt="Collection detail view" />
 </p>
 
 ## Features
 
-- **Tabbed browsing** - separate tabs for Claude Code and Codex skills with count badges
-- **Search** - filter skills by name or description
+- **Tabbed browsing** - separate tabs for Claude Code, Codex, and Collections with count badges
+- **Search** - filter skills and collections by name, description, or trigger
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
 - **Sort options** - sort skills by A-Z, Recently Modified, or Most Used (persisted across restarts)
+- **Collections** - create custom cross-source groups that can mix Claude Code and Codex skills in one saved view
 - **Usage stats** - tracks skill invocations from Claude Code and Codex CLI history with source-aware insights, summary breakdowns, and ranked per-skill usage sections
 - **"New" indicator** - skills modified in the last 24 hours are marked with a blue badge
-- **Detail view** - metadata badges, description, trigger command with copy button, file listing
+- **Detail view** - metadata badges, collection membership, trigger command with copy button, and file listing
 - **Full content preview** - expandable section to view the raw SKILL.md body
 - **Quick actions** - open in VS Code, open in default editor, copy path, reveal in Finder, delete
-- **Right-click context menu** - pin, open, copy, delete directly from the list
+- **Right-click context menu** - pin, add to collections, open, copy, and delete directly from the list
 - **Global hotkey** - toggle the popover from anywhere with `Option + Shift + S`
 - **Agent browsing** - browse Claude Code sub-agents (user and plugin) with model, color, and tools metadata
 - **Live updates** - FSEvents directory watcher auto-refreshes when skills are added or removed
@@ -47,12 +54,12 @@
 
 ## Watched Directories
 
-| Path | Source |
-|------|--------|
-| `~/.claude/skills/` | Claude Code user skills |
-| `~/.claude/plugins/cache/` | Claude Code plugin skills |
-| `~/.claude/agents/` | Claude Code user agents |
-| `~/.codex/skills/` | Codex CLI built-in and user skills |
+| Path                       | Source                             |
+| -------------------------- | ---------------------------------- |
+| `~/.claude/skills/`        | Claude Code user skills            |
+| `~/.claude/plugins/cache/` | Claude Code plugin skills          |
+| `~/.claude/agents/`        | Claude Code user agents            |
+| `~/.codex/skills/`         | Codex CLI built-in and user skills |
 
 ## Install
 

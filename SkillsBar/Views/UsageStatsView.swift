@@ -63,7 +63,7 @@ struct UsageStatsView: View {
                 }
             }
         }
-        .frame(width: 440, height: 620)
+        .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.detailHeight)
     }
 
     // MARK: - Empty State

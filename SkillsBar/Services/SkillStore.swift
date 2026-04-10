@@ -5,6 +5,7 @@ import SwiftUI
 final class SkillStore: ObservableObject {
     @Published var groups: [SkillGroup] = []
     @Published var agentGroups: [AgentGroup] = []
+    @Published var collections: [SkillCollection] = []
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
     @Published var pinnedOrder: [String] = []
@@ -27,6 +28,7 @@ final class SkillStore: ObservableObject {
     private static let pinnedKey = "pinnedSkillPaths"
     private static let pinnedOrderKey = "pinnedSkillOrder"
     private static let sortKey = "skillSortOption"
+    private static let collectionsKey = "skillCollections"
 
     init(usageTracker: UsageTracker? = nil) {
         self.usageTracker = usageTracker
@@ -48,11 +50,21 @@ final class SkillStore: ObservableObject {
         } else {
             pinnedOrder = Array(pinnedPaths).sorted()
         }
+
+        if let savedData = UserDefaults.standard.data(forKey: Self.collectionsKey),
+           let savedCollections = try? JSONDecoder().decode([SkillCollection].self, from: savedData) {
+            collections = savedCollections
+        }
     }
 
     private func persistPins() {
         UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
         UserDefaults.standard.set(pinnedOrder, forKey: Self.pinnedOrderKey)
+    }
+
+    private func persistCollections() {
+        let encoded = try? JSONEncoder().encode(collections)
+        UserDefaults.standard.set(encoded, forKey: Self.collectionsKey)
     }
 
     func movePinnedItem(from sourcePath: String, toIndex destinationIndex: Int) {
@@ -61,6 +73,128 @@ final class SkillStore: ObservableObject {
         let adjustedIndex = min(destinationIndex, pinnedOrder.count)
         pinnedOrder.insert(sourcePath, at: adjustedIndex)
         persistPins()
+    }
+
+    // MARK: - Collections
+
+    func createCollection(named name: String, including skill: Skill? = nil) -> SkillCollection {
+        let collection = SkillCollection(
+            name: uniqueCollectionName(from: name),
+            skillPaths: skill.map { [$0.path] } ?? []
+        )
+        collections.append(collection)
+        persistCollections()
+        return collection
+    }
+
+    func renameCollection(_ collection: SkillCollection, to name: String) {
+        guard let index = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+        collections[index].name = uniqueCollectionName(from: name, excluding: collection.id)
+        collections[index].updatedAt = Date()
+        persistCollections()
+    }
+
+    func deleteCollection(_ collection: SkillCollection) {
+        collections.removeAll { $0.id == collection.id }
+        persistCollections()
+    }
+
+    func toggleSkill(_ skill: Skill, in collection: SkillCollection) {
+        guard let index = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+
+        if let pathIndex = collections[index].skillPaths.firstIndex(of: skill.path) {
+            collections[index].skillPaths.remove(at: pathIndex)
+        } else {
+            collections[index].skillPaths.append(skill.path)
+        }
+
+        collections[index].updatedAt = Date()
+        persistCollections()
+    }
+
+    func isSkill(_ skill: Skill, in collection: SkillCollection) -> Bool {
+        collection.skillPaths.contains(skill.path)
+    }
+
+    func collections(for skill: Skill) -> [SkillCollection] {
+        collections.filter { $0.skillPaths.contains(skill.path) }
+    }
+
+    func skill(forPath path: String) -> Skill? {
+        lastScannedSkills.first { $0.path == path }
+    }
+
+    func resolvedCollections(searchText query: String = "") -> [ResolvedSkillCollection] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let skillLookup = Dictionary(uniqueKeysWithValues: lastScannedSkills.map { ($0.path, $0) })
+
+        return collections.compactMap { collection in
+            let resolvedSkills = collection.skillPaths.compactMap { skillLookup[$0] }
+            let missingCount = max(0, collection.skillPaths.count - resolvedSkills.count)
+
+            let visibleSkills: [Skill]
+            if trimmedQuery.isEmpty {
+                visibleSkills = resolvedSkills
+            } else if collection.name.lowercased().contains(trimmedQuery) {
+                visibleSkills = resolvedSkills
+            } else {
+                visibleSkills = resolvedSkills.filter { skill in
+                    skill.name.lowercased().contains(trimmedQuery) ||
+                    skill.description.lowercased().contains(trimmedQuery) ||
+                    skill.triggerCommand.lowercased().contains(trimmedQuery) ||
+                    skill.source.groupTitle.lowercased().contains(trimmedQuery) ||
+                    skill.source.sectionTitle.lowercased().contains(trimmedQuery)
+                }
+            }
+
+            let nameMatches = collection.name.lowercased().contains(trimmedQuery)
+            guard trimmedQuery.isEmpty || nameMatches || !visibleSkills.isEmpty else { return nil }
+
+            return ResolvedSkillCollection(
+                collection: collection,
+                skills: visibleSkills,
+                missingCount: missingCount
+            )
+        }
+    }
+
+    private func uniqueCollectionName(from proposedName: String, excluding collectionID: UUID? = nil) -> String {
+        let baseName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "New Collection"
+            : proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let existingNames = Set(
+            collections
+                .filter { $0.id != collectionID }
+                .map { $0.name.lowercased() }
+        )
+
+        guard !existingNames.contains(baseName.lowercased()) else {
+            var suffix = 2
+            while existingNames.contains("\(baseName) \(suffix)".lowercased()) {
+                suffix += 1
+            }
+            return "\(baseName) \(suffix)"
+        }
+
+        return baseName
+    }
+
+    private func removeSkillPathFromCollections(_ path: String) {
+        var didChange = false
+
+        for index in collections.indices {
+            let originalCount = collections[index].skillPaths.count
+            collections[index].skillPaths.removeAll { $0 == path }
+            if collections[index].skillPaths.count != originalCount {
+                collections[index].updatedAt = Date()
+                didChange = true
+            }
+        }
+
+        if didChange {
+            persistCollections()
+        }
     }
 
     // MARK: - Pinning (Skills)
@@ -131,6 +265,8 @@ final class SkillStore: ObservableObject {
             tabGroups = source.filter { $0.id == "claude-code" }
         case .codex:
             tabGroups = source.filter { $0.id == "codex-cli" }
+        case .collections:
+            return []
         }
 
         // Build pinned section from skills in this tab, preserving custom order
@@ -220,12 +356,15 @@ final class SkillStore: ObservableObject {
             return skillCount + agentCount
         case .codex:
             return allGroups.filter { $0.id == "codex-cli" }.reduce(0) { $0 + $1.totalCount }
+        case .collections:
+            return collections.count
         }
     }
 
     enum SkillTab: String, CaseIterable, Identifiable {
         case claudeCode = "Claude Code"
         case codex = "Codex"
+        case collections = "Collections"
 
         var id: String { rawValue }
     }
@@ -269,6 +408,7 @@ final class SkillStore: ObservableObject {
         pinnedPaths.remove(skill.path)
         pinnedOrder.removeAll { $0 == skill.path }
         persistPins()
+        removeSkillPathFromCollections(skill.path)
         refresh()
     }
 
