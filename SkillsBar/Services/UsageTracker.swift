@@ -120,12 +120,7 @@ final class UsageTracker: ObservableObject {
             }
         }
 
-        // Track which cached files still exist
-        var validPaths = Set<String>()
-
         for filePath in jsonlFiles {
-            validPaths.insert(filePath)
-
             guard let attrs = try? fm.attributesOfItem(atPath: filePath),
                   let mtime = attrs[.modificationDate] as? Date,
                   let size = attrs[.size] as? UInt64 else { continue }
@@ -147,10 +142,9 @@ final class UsageTracker: ObservableObject {
             )
         }
 
-        // Prune deleted files
-        for key in cache.parsedFiles.keys where !validPaths.contains(key) {
-            cache.parsedFiles.removeValue(forKey: key)
-        }
+        // Keep previously parsed session files in the cache even if Claude later
+        // removes the original transcript from ~/.claude/projects. Without this,
+        // the visible history window shrinks over time and older usage is lost.
 
         cache.lastFullScanDate = Date()
         return cache
@@ -274,7 +268,7 @@ final class UsageTracker: ObservableObject {
     // MARK: - Cache I/O
 
     nonisolated private func loadCache() async -> UsageCache {
-        let url = await cacheURL
+        let url = cacheURL
         guard let data = try? Data(contentsOf: url) else { return UsageCache() }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -288,7 +282,7 @@ final class UsageTracker: ObservableObject {
     }
 
     nonisolated private func saveCache(_ cache: UsageCache) async {
-        let url = await cacheURL
+        let url = cacheURL
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
