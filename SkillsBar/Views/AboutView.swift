@@ -4,10 +4,11 @@ struct AboutView: View {
     @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.2"
+    private let heroCornerRadius: CGFloat = 22
+    private let sectionCornerRadius: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Button(action: onBack) {
                     HStack(spacing: 4) {
@@ -26,109 +27,93 @@ struct AboutView: View {
 
             Divider()
 
-            VStack(spacing: 20) {
-                Spacer()
+            VStack(spacing: 14) {
+                heroCard
 
-                // App icon
-                if let icon = NSApp.applicationIconImage {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .frame(width: 80, height: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                }
-
-                // App name and version
-                VStack(spacing: 4) {
-                    Text("SkillsBar")
-                        .font(.system(size: 22, weight: .bold))
-                    Text("Version \(appVersion)")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-
-                // Description
-                Text("A macOS menu bar app for browsing and managing your Claude Code and Codex CLI skills and agents.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-
-                // Info cards
-                VStack(spacing: 8) {
-                    infoCard(
-                        icon: "folder",
-                        title: "Watched Directories",
-                        items: [
-                            "~/.claude/skills/",
-                            "~/.claude/plugins/cache/",
-                            "~/.codex/skills/",
-                            "~/.claude/agents/"
-                        ]
-                    )
-
-                    infoCard(
-                        icon: "keyboard",
-                        title: "Keyboard Shortcut",
-                        items: ["Option + Shift + S"]
-                    )
-
-                    sortCard
-                }
-                .padding(.horizontal, 20)
-
-                // Links
-                HStack(spacing: 20) {
-                    Button {
-                        if let url = URL(string: "https://github.com/amandeepmittal/skillsbar") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "link")
-                                .font(.system(size: 12))
-                            Text("GitHub")
-                                .font(.system(size: 13))
-                        }
+                infoSection(icon: "folder", title: "Watched Directories") {
+                    VStack(spacing: 0) {
+                        directoryRow("~/.claude/skills/")
+                        sectionDivider
+                        directoryRow("~/.claude/plugins/cache/")
+                        sectionDivider
+                        directoryRow("~/.codex/skills/")
+                        sectionDivider
+                        directoryRow("~/.claude/agents/")
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.blue)
                 }
 
-                Spacer()
-
-                VStack(spacing: 4) {
-                    Text("Built with SwiftUI by")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                    Button {
-                        if let url = URL(string: "https://amanhimself.dev") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    } label: {
-                        Text("Aman Mittal")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.blue)
+                infoSection(icon: "keyboard", title: "Keyboard Shortcut") {
+                    Text("Option + Shift + S")
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(.primary)
                 }
-                .padding(.bottom, 16)
+
+                sortCard
+
+                footerLinks
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.aboutHeight)
     }
 
-    private var sortCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                Text("DEFAULT SORT")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .tracking(0.5)
+    private var heroCard: some View {
+        VStack(spacing: 16) {
+            if let icon = NSApp.applicationIconImage {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 96, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                    .shadow(color: Color.blue.opacity(0.14), radius: 18, y: 8)
             }
 
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Text("SkillsBar")
+                        .font(.system(size: 28, weight: .bold))
+
+                    Text("v\(appVersion)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.65))
+                        .clipShape(Capsule())
+                }
+
+                Text("Browse Claude Code and Codex CLI skills, agents, and collections right from your menu bar.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+                    .lineSpacing(2)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.blue.opacity(0.14),
+                    Color.blue.opacity(0.05)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: heroCornerRadius)
+                .stroke(Color.blue.opacity(0.10), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: heroCornerRadius))
+    }
+
+    private var sortCard: some View {
+        infoSection(icon: "arrow.up.arrow.down", title: "Default Sort") {
             Picker("", selection: $skillStore.sortOption) {
                 ForEach(SkillSortOption.allCases, id: \.self) { option in
                     Text(option.rawValue).tag(option)
@@ -137,14 +122,47 @@ struct AboutView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private func infoCard(icon: String, title: String, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var footerLinks: some View {
+        HStack(spacing: 14) {
+            footerLink(
+                title: "GitHub",
+                systemImage: "link",
+                urlString: "https://github.com/amandeepmittal/skillsbar"
+            )
+
+            footerSeparator
+
+            footerLink(
+                title: "amanhimself.dev",
+                systemImage: "globe",
+                urlString: "https://amanhimself.dev"
+            )
+
+            footerSeparator
+
+            footerLink(
+                title: "Aman Mittal",
+                systemImage: "person.crop.circle",
+                urlString: "https://amanhimself.dev"
+            )
+        }
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
+        .background(Color.primary.opacity(0.05))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func infoSection<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 11))
@@ -155,15 +173,58 @@ struct AboutView: View {
                     .tracking(0.5)
             }
 
-            ForEach(items, id: \.self) { item in
-                Text(item)
-                    .font(.system(size: 12, design: .monospaced))
-                    .textSelection(.enabled)
-            }
+            content()
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(Color.primary.opacity(0.05))
+        .overlay(
+            RoundedRectangle(cornerRadius: sectionCornerRadius)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: sectionCornerRadius))
+    }
+
+    private func directoryRow(_ path: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(Color.blue.opacity(0.45))
+                .frame(width: 5, height: 5)
+                .padding(.top, 5)
+
+            Text(path)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var footerSeparator: some View {
+        Circle()
+            .fill(Color.secondary.opacity(0.25))
+            .frame(width: 4, height: 4)
+    }
+
+    private var sectionDivider: some View {
+        Divider()
+            .overlay(Color.primary.opacity(0.05))
+            .padding(.leading, 15)
+    }
+
+    private func footerLink(title: String, systemImage: String, urlString: String) -> some View {
+        Button {
+            if let url = URL(string: urlString) {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
     }
 }

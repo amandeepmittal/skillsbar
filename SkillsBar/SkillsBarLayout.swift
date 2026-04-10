@@ -5,5 +5,5 @@ enum SkillsBarLayout {
     static let popoverHeight: CGFloat = 760
     static let mainScrollHeight: CGFloat = 680
     static let detailHeight: CGFloat = 700
-    static let aboutHeight: CGFloat = 780
+    static let aboutHeight: CGFloat = 720
 }
