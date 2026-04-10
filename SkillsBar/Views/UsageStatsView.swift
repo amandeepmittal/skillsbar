@@ -2,6 +2,7 @@ import SwiftUI
 
 private let cardBackground = Color.primary.opacity(0.10)
 private let cardRadius: CGFloat = 12
+private let maxDisplayedSkillsPerSource = 10
 
 struct UsageStatsView: View {
     @ObservedObject var usageTracker: UsageTracker
@@ -226,6 +227,8 @@ struct UsageStatsView: View {
 
     private func sourceSection(_ source: UsageSource) -> some View {
         let stats = usageTracker.rankedStats(for: source)
+        let visibleStats = Array(stats.prefix(maxDisplayedSkillsPerSource))
+        let hiddenCount = max(0, stats.count - visibleStats.count)
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
@@ -242,11 +245,18 @@ struct UsageStatsView: View {
                     .clipShape(Capsule())
             }
 
-            ForEach(Array(stats.enumerated()), id: \.element.id) { index, stat in
+            ForEach(Array(visibleStats.enumerated()), id: \.element.id) { index, stat in
                 if index > 0 {
                     Divider()
                 }
                 rankedRow(stat: stat, index: index + 1)
+            }
+
+            if hiddenCount > 0 {
+                Text("Showing top \(maxDisplayedSkillsPerSource). \(hiddenCount) more hidden.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
             }
         }
     }
