@@ -434,6 +434,10 @@ final class SkillStore: ObservableObject {
         NSWorkspace.shared.open(URL(fileURLWithPath: skill.path))
     }
 
+    static func revealInFinder(_ skill: Skill) {
+        NSWorkspace.shared.selectFile(skill.path, inFileViewerRootedAtPath: "")
+    }
+
     static func openAgentInVSCode(_ agent: Agent) {
         let url = URL(fileURLWithPath: agent.path)
         NSWorkspace.shared.open(
@@ -445,6 +449,10 @@ final class SkillStore: ObservableObject {
 
     static func openAgentInDefaultEditor(_ agent: Agent) {
         NSWorkspace.shared.open(URL(fileURLWithPath: agent.path))
+    }
+
+    static func revealAgentInFinder(_ agent: Agent) {
+        NSWorkspace.shared.selectFile(agent.path, inFileViewerRootedAtPath: "")
     }
 
     // MARK: - Watching

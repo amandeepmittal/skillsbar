@@ -417,6 +417,9 @@ struct MenuBarView: View {
             Button("Open in Default Editor") {
                 SkillStore.openInDefaultEditor(skill)
             }
+            Button("Reveal in Finder") {
+                SkillStore.revealInFinder(skill)
+            }
             Divider()
             Button("Copy Command") {
                 NSPasteboard.general.clearContents()
@@ -808,6 +811,9 @@ struct MenuBarView: View {
             }
             Button("Open in Default Editor") {
                 SkillStore.openAgentInDefaultEditor(agent)
+            }
+            Button("Reveal in Finder") {
+                SkillStore.revealAgentInFinder(agent)
             }
             Divider()
             Button("Copy Path") {
