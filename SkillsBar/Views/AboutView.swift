@@ -3,6 +3,7 @@ import SwiftUI
 struct AboutView: View {
     @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,7 +41,7 @@ struct AboutView: View {
                 VStack(spacing: 4) {
                     Text("SkillsBar")
                         .font(.system(size: 22, weight: .bold))
-                    Text("Version 1.3.2")
+                    Text("Version \(appVersion)")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
