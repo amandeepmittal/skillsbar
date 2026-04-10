@@ -1,21 +1,93 @@
 import Foundation
 
+enum UsageSource: String, Codable, CaseIterable, Hashable {
+    case claudeCode
+    case codexCLI
+
+    var displayName: String {
+        switch self {
+        case .claudeCode:
+            return "Claude Code"
+        case .codexCLI:
+            return "Codex CLI"
+        }
+    }
+
+    var commandPrefix: String {
+        switch self {
+        case .claudeCode:
+            return "/"
+        case .codexCLI:
+            return "$"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .claudeCode:
+            return "Claude"
+        case .codexCLI:
+            return "Codex"
+        }
+    }
+}
+
 struct SkillInvocation: Codable, Identifiable {
-    var id: String { "\(sessionId)-\(timestamp.timeIntervalSince1970)-\(skillName)" }
+    let source: UsageSource
     let skillName: String
     let args: String?
     let timestamp: Date
     let sessionId: String
     let projectPath: String?
+
+    var id: String {
+        "\(source.rawValue)-\(sessionId)-\(timestamp.timeIntervalSince1970)-\(skillName)"
+    }
+
+    init(source: UsageSource, skillName: String, args: String?, timestamp: Date, sessionId: String, projectPath: String?) {
+        self.source = source
+        self.skillName = skillName
+        self.args = args
+        self.timestamp = timestamp
+        self.sessionId = sessionId
+        self.projectPath = projectPath
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case source
+        case skillName
+        case args
+        case timestamp
+        case sessionId
+        case projectPath
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        source = try container.decodeIfPresent(UsageSource.self, forKey: .source) ?? .claudeCode
+        skillName = try container.decode(String.self, forKey: .skillName)
+        args = try container.decodeIfPresent(String.self, forKey: .args)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        sessionId = try container.decode(String.self, forKey: .sessionId)
+        projectPath = try container.decodeIfPresent(String.self, forKey: .projectPath)
+    }
 }
 
 struct SkillUsageStat: Identifiable {
-    var id: String { skillName }
+    let source: UsageSource
     let skillName: String
     let totalCount: Int
     let lastUsedDate: Date?
     let firstUsedDate: Date?
     let invocations: [SkillInvocation]
+
+    var id: String {
+        "\(source.rawValue)::\(skillName)"
+    }
+
+    var displayCommand: String {
+        source.commandPrefix + skillName
+    }
 
     var daysSinceLastUsed: Int? {
         guard let date = lastUsedDate else { return nil }

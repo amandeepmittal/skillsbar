@@ -38,7 +38,7 @@ struct MenuBarView: View {
             } else if showUsageStats {
                 UsageStatsView(
                     usageTracker: usageTracker,
-                    installedSkillNames: installedSkillTriggerNames,
+                    installedSkillIdentifiers: installedSkillIdentifiers,
                     onBack: { showUsageStats = false }
                 )
             } else if let agent = selectedAgent {
@@ -57,7 +57,7 @@ struct MenuBarView: View {
                 SkillDetailView(
                     skill: skill,
                     isPinned: store.isPinned(skill),
-                    usageStat: usageTracker.stat(for: skill.triggerCommand),
+                    usageStat: usageTracker.stat(for: skill),
                     onBack: { selectedSkill = nil },
                     onDelete: { skill in
                         store.deleteSkill(skill)
@@ -335,7 +335,7 @@ struct MenuBarView: View {
             SkillRowView(
                 skill: skill,
                 isPinned: store.isPinned(skill),
-                usageCount: usageTracker.stat(for: skill.triggerCommand)?.totalCount
+                usageCount: usageTracker.stat(for: skill)?.totalCount
             )
         }
         .buttonStyle(.plain)
@@ -723,11 +723,8 @@ struct MenuBarView: View {
         return false
     }
 
-    private var installedSkillTriggerNames: Set<String> {
+    private var installedSkillIdentifiers: Set<String> {
         let allSkills = store.groups.flatMap { $0.sections.flatMap { $0.skills } }
-        return Set(allSkills.map { skill in
-            let cmd = skill.triggerCommand
-            return cmd.hasPrefix("/") ? String(cmd.dropFirst()) : cmd
-        })
+        return Set(allSkills.map { UsageTracker.identifier(for: $0) })
     }
 }

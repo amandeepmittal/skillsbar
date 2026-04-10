@@ -5,12 +5,11 @@ private let cardRadius: CGFloat = 12
 
 struct UsageStatsView: View {
     @ObservedObject var usageTracker: UsageTracker
-    let installedSkillNames: Set<String>
+    let installedSkillIdentifiers: Set<String>
     let onBack: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Button(action: onBack) {
                     HStack(spacing: 4) {
@@ -34,7 +33,12 @@ struct UsageStatsView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 13))
                         .rotationEffect(.degrees(usageTracker.isLoading ? 360 : 0))
-                        .animation(usageTracker.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: usageTracker.isLoading)
+                        .animation(
+                            usageTracker.isLoading
+                                ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                : .default,
+                            value: usageTracker.isLoading
+                        )
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -71,7 +75,7 @@ struct UsageStatsView: View {
                 .foregroundStyle(.secondary)
             Text("No Usage Data")
                 .font(.system(size: 16, weight: .semibold))
-            Text("Skill invocations from Claude Code session transcripts will appear here once you start using skills.")
+            Text("Claude Code session transcripts and explicit Codex skill triggers will appear here once you start using skills.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -84,7 +88,7 @@ struct UsageStatsView: View {
     // MARK: - Summary Card
 
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("SUMMARY")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
@@ -96,6 +100,17 @@ struct UsageStatsView: View {
                 statItem(value: "\(usageTracker.stats.count)", label: "Skills Used")
                 Divider().frame(height: 30)
                 statItem(value: dateRange, label: "Date Range")
+            }
+
+            if !usageTracker.sourcesWithStats.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(usageTracker.sourcesWithStats, id: \.self) { source in
+                        sourcePill(
+                            label: source.displayName,
+                            value: "\(usageTracker.totalInvocations(for: source))"
+                        )
+                    }
+                }
             }
         }
         .padding(14)
@@ -110,6 +125,7 @@ struct UsageStatsView: View {
               let latest = allStats.compactMap({ $0.lastUsedDate }).max() else {
             return "--"
         }
+
         let days = Calendar.current.dateComponents([.day], from: earliest, to: latest).day ?? 0
         if days == 0 { return "Today" }
         if days < 7 { return "\(days)d" }
@@ -131,7 +147,8 @@ struct UsageStatsView: View {
                     icon: "crown.fill",
                     color: .yellow,
                     label: "Most used",
-                    value: "/\(top.skillName) (\(top.totalCount)x)"
+                    value: "\(top.displayCommand) (\(top.totalCount)x)",
+                    source: top.source
                 )
             }
 
@@ -142,7 +159,8 @@ struct UsageStatsView: View {
                     icon: "clock.fill",
                     color: .blue,
                     label: "Last used",
-                    value: "/\(latest.0.skillName) \(relativeDate(latest.1))"
+                    value: "\(latest.0.displayCommand) \(relativeDate(latest.1))",
+                    source: latest.0.source
                 )
             }
 
@@ -152,7 +170,8 @@ struct UsageStatsView: View {
                     icon: "exclamationmark.triangle.fill",
                     color: .orange,
                     label: "Stale (\(stale.count))",
-                    value: stale.map { "/\($0.skillName)" }.joined(separator: ", ")
+                    value: stale.prefix(3).map(\.displayCommand).joined(separator: ", "),
+                    source: stale.first?.source
                 )
             }
         }
@@ -162,7 +181,7 @@ struct UsageStatsView: View {
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
     }
 
-    private func insightRow(icon: String, color: Color, label: String, value: String) -> some View {
+    private func insightRow(icon: String, color: Color, label: String, value: String, source: UsageSource?) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 11))
@@ -175,62 +194,99 @@ struct UsageStatsView: View {
             Text(value)
                 .font(.system(size: 12))
                 .lineLimit(1)
+            Spacer(minLength: 0)
+            if let source {
+                sourceTag(source)
+            }
         }
     }
 
     // MARK: - Ranked List
 
     private var rankedListCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("ALL SKILLS")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .tracking(0.5)
 
-            ForEach(Array(usageTracker.rankedStats.enumerated()), id: \.element.id) { index, stat in
+            ForEach(Array(usageTracker.sourcesWithStats.enumerated()), id: \.element) { index, source in
                 if index > 0 {
                     Divider()
+                        .padding(.vertical, 2)
                 }
-                HStack(spacing: 10) {
-                    Text("#\(index + 1)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 26, alignment: .leading)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text("/\(stat.skillName)")
-                                .font(.system(size: 13, weight: .medium))
-                            if !installedSkillNames.contains(stat.skillName) {
-                                Text("not installed")
-                                    .font(.system(size: 9, weight: .medium))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Color.secondary.opacity(0.15))
-                                    .foregroundStyle(.secondary)
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        if let lastUsed = stat.lastUsedDate {
-                            Text("Last used \(relativeDate(lastUsed))")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-
-                    Spacer()
-
-                    Text("\(stat.totalCount)x")
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
+                sourceSection(source)
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private func sourceSection(_ source: UsageSource) -> some View {
+        let stats = usageTracker.rankedStats(for: source)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(source.displayName.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+                Text("\(stats.count)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.secondary.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            ForEach(Array(stats.enumerated()), id: \.element.id) { index, stat in
+                if index > 0 {
+                    Divider()
+                }
+                rankedRow(stat: stat, index: index + 1)
+            }
+        }
+    }
+
+    private func rankedRow(stat: SkillUsageStat, index: Int) -> some View {
+        HStack(spacing: 10) {
+            Text("#\(index)")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 26, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(stat.displayCommand)
+                        .font(.system(size: 13, weight: .medium))
+                    if !installedSkillIdentifiers.contains(stat.id) {
+                        Text("not installed")
+                            .font(.system(size: 9, weight: .medium))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.15))
+                            .foregroundStyle(.secondary)
+                            .clipShape(Capsule())
+                    }
+                }
+
+                if let lastUsed = stat.lastUsedDate {
+                    Text("Last used \(relativeDate(lastUsed))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Spacer()
+
+            Text("\(stat.totalCount)x")
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - Helpers
@@ -244,6 +300,29 @@ struct UsageStatsView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func sourcePill(label: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+            Text(value)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.primary.opacity(0.06))
+        .clipShape(Capsule())
+    }
+
+    private func sourceTag(_ source: UsageSource) -> some View {
+        Text(source.shortLabel)
+            .font(.system(size: 9, weight: .bold))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.secondary.opacity(0.12))
+            .foregroundStyle(.secondary)
+            .clipShape(Capsule())
     }
 
     private func relativeDate(_ date: Date) -> String {

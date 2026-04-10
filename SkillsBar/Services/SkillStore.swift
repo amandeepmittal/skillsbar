@@ -422,8 +422,8 @@ final class SkillStore: ObservableObject {
             }
         case .mostUsed:
             return skills.sorted { a, b in
-                let aCount = usageTracker?.stat(for: a.triggerCommand)?.totalCount ?? 0
-                let bCount = usageTracker?.stat(for: b.triggerCommand)?.totalCount ?? 0
+                let aCount = usageTracker?.stat(for: a)?.totalCount ?? 0
+                let bCount = usageTracker?.stat(for: b)?.totalCount ?? 0
                 if aCount != bCount { return aCount > bCount }
                 return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
