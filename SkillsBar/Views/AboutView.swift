@@ -3,7 +3,7 @@ import SwiftUI
 struct AboutView: View {
     @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
-    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.1"
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.2"
 
     var body: some View {
         VStack(spacing: 0) {
