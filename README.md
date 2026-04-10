@@ -74,16 +74,6 @@
 - macOS 14 (Sonoma) or later
 - Xcode 15+ (to build from source)
 
-## Build from Source
-
-```bash
-git clone https://github.com/amandeepmittal/skillsbar.git
-cd skillsbar
-xcodebuild -scheme SkillsBar -configuration Release build
-```
-
-Or open `SkillsBar.xcodeproj` in Xcode and hit Run.
-
 ## Tech Stack
 
 - Swift 5.9, SwiftUI
