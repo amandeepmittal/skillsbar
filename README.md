@@ -19,8 +19,6 @@
   &nbsp;&nbsp;
   <img src="screenshots/codex-tab.png" width="320" alt="Codex skills" />
   &nbsp;&nbsp;
-  <img src="screenshots/dark-mode.png" width="320" alt="Dark mode" />
-  &nbsp;&nbsp;
   <img src="screenshots/detail-view.png" width="320" alt="Skill detail view" />
   &nbsp;&nbsp;
   <img src="screenshots/usage-stats.png" width="320" alt="Usage stats" />
