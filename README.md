@@ -34,7 +34,7 @@
 - **Search** - filter skills by name or description
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
 - **Sort options** - sort skills by A-Z, Recently Modified, or Most Used (persisted across restarts)
-- **Usage stats** - tracks skill invocations from Claude Code session transcripts with insights, ranked list, and per-skill usage cards
+- **Usage stats** - tracks skill invocations from Claude Code and Codex CLI history with source-aware insights, summary breakdowns, and ranked per-skill usage sections
 - **"New" indicator** - skills modified in the last 24 hours are marked with a blue badge
 - **Detail view** - metadata badges, description, trigger command with copy button, file listing
 - **Full content preview** - expandable section to view the raw SKILL.md body

@@ -104,12 +104,14 @@ struct UsageStatsView: View {
             }
 
             if !usageTracker.sourcesWithStats.isEmpty {
+                Text("BY SOURCE")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+
                 HStack(spacing: 8) {
                     ForEach(usageTracker.sourcesWithStats, id: \.self) { source in
-                        sourcePill(
-                            label: source.displayName,
-                            value: "\(usageTracker.totalInvocations(for: source))"
-                        )
+                        sourceSummaryItem(source)
                     }
                 }
             }
@@ -211,12 +213,8 @@ struct UsageStatsView: View {
                 .foregroundStyle(.secondary)
                 .tracking(0.5)
 
-            ForEach(Array(usageTracker.sourcesWithStats.enumerated()), id: \.element) { index, source in
-                if index > 0 {
-                    Divider()
-                        .padding(.vertical, 2)
-                }
-                sourceSection(source)
+            ForEach(usageTracker.sourcesWithStats, id: \.self) { source in
+                sourceSectionCard(source)
             }
         }
         .padding(14)
@@ -225,12 +223,20 @@ struct UsageStatsView: View {
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
     }
 
+    private func sourceSectionCard(_ source: UsageSource) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sourceSection(source)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
     private func sourceSection(_ source: UsageSource) -> some View {
         let stats = usageTracker.rankedStats(for: source)
         let visibleStats = Array(stats.prefix(maxDisplayedSkillsPerSource))
-        let hiddenCount = max(0, stats.count - visibleStats.count)
 
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(source.displayName.uppercased())
                     .font(.system(size: 11, weight: .semibold))
@@ -250,13 +256,6 @@ struct UsageStatsView: View {
                     Divider()
                 }
                 rankedRow(stat: stat, index: index + 1)
-            }
-
-            if hiddenCount > 0 {
-                Text("Showing top \(maxDisplayedSkillsPerSource). \(hiddenCount) more hidden.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 2)
             }
         }
     }
@@ -312,17 +311,19 @@ struct UsageStatsView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func sourcePill(label: String, value: String) -> some View {
-        HStack(spacing: 6) {
-            Text(label)
+    private func sourceSummaryItem(_ source: UsageSource) -> some View {
+        VStack(spacing: 4) {
+            Text(source.displayName)
                 .font(.system(size: 11, weight: .medium))
-            Text(value)
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Text("\(usageTracker.totalInvocations(for: source))")
+                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
         .background(Color.primary.opacity(0.06))
-        .clipShape(Capsule())
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private func sourceTag(_ source: UsageSource) -> some View {
