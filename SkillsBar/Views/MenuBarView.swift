@@ -366,15 +366,7 @@ struct MenuBarView: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .tracking(0.5)
-                        if collapsed {
-                            Text("\(section.skills.count)")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.tertiary)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Color.secondary.opacity(0.12))
-                                .clipShape(Capsule())
-                        }
+                        countBadge("\(section.skills.count)")
                         Spacer()
                     }
                     .contentShape(Rectangle())
@@ -497,15 +489,7 @@ struct MenuBarView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .tracking(0.5)
-                    if collapsed {
-                        Text("\(plugins.count)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
+                    countBadge("\(plugins.count)")
                     Spacer()
                 }
                 .contentShape(Rectangle())
@@ -868,15 +852,7 @@ struct MenuBarView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .tracking(0.5)
-                    if collapsed {
-                        Text("\(section.agents.count)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
+                    countBadge("\(section.agents.count)")
                     Spacer()
                 }
                 .contentShape(Rectangle())
