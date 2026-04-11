@@ -4,6 +4,49 @@ private let cardBackground = Color.primary.opacity(0.10)
 private let cardRadius: CGFloat = 12
 private let maxDisplayedSkillsPerSource = 10
 
+private enum UsageAvailabilityStatus: Equatable {
+    case available
+    case missingOnDisk
+    case notInstalled
+
+    var label: String {
+        switch self {
+        case .available:
+            return ""
+        case .missingOnDisk:
+            return "missing on disk"
+        case .notInstalled:
+            return "not installed"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .available:
+            return ""
+        case .missingOnDisk:
+            return "externaldrive.badge.exclamationmark"
+        case .notInstalled:
+            return "arrow.down.circle"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .available:
+            return .secondary
+        case .missingOnDisk:
+            return Color(red: 0.76, green: 0.20, blue: 0.25)
+        case .notInstalled:
+            return Color(red: 0.21, green: 0.42, blue: 0.78)
+        }
+    }
+
+    var isUnavailable: Bool {
+        self != .available
+    }
+}
+
 struct UsageStatsView: View {
     @ObservedObject var usageTracker: UsageTracker
     let installedSkillIdentifiers: Set<String>
@@ -261,7 +304,9 @@ struct UsageStatsView: View {
     }
 
     private func rankedRow(stat: SkillUsageStat, index: Int) -> some View {
-        HStack(spacing: 10) {
+        let availability = availabilityStatus(for: stat)
+
+        return HStack(spacing: 10) {
             Text("#\(index)")
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .foregroundStyle(.tertiary)
@@ -271,21 +316,24 @@ struct UsageStatsView: View {
                 HStack(spacing: 6) {
                     Text(stat.displayCommand)
                         .font(.system(size: 13, weight: .medium))
-                    if !installedSkillIdentifiers.contains(stat.id) {
-                        Text("not installed")
-                            .font(.system(size: 9, weight: .medium))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.15))
-                            .foregroundStyle(.secondary)
-                            .clipShape(Capsule())
+                        .foregroundStyle(availability.isUnavailable ? .secondary : .primary)
+                    if availability.isUnavailable {
+                        availabilityBadge(availability)
                     }
                 }
 
-                if let lastUsed = stat.lastUsedDate {
-                    Text("Last used \(relativeDate(lastUsed))")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
+                    if let lastUsed = stat.lastUsedDate {
+                        Text("Last used \(relativeDate(lastUsed))")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    if availability.isUnavailable {
+                        Text("History only")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(availability.tint)
+                    }
                 }
             }
 
@@ -293,9 +341,22 @@ struct UsageStatsView: View {
 
             Text("\(stat.totalCount)x")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(availability.isUnavailable ? .tertiary : .secondary)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, availability.isUnavailable ? 8 : 0)
+        .padding(.vertical, availability.isUnavailable ? 8 : 4)
+        .background {
+            Group {
+                if availability.isUnavailable {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(availability.tint.opacity(0.08))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(availability.tint.opacity(0.12), lineWidth: 1)
+                        }
+                }
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -334,6 +395,43 @@ struct UsageStatsView: View {
             .background(Color.secondary.opacity(0.12))
             .foregroundStyle(.secondary)
             .clipShape(Capsule())
+    }
+
+    private func availabilityBadge(_ availability: UsageAvailabilityStatus) -> some View {
+        Label(availability.label, systemImage: availability.iconName)
+            .font(.system(size: 9, weight: .bold))
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(availability.tint.opacity(0.14))
+            .foregroundStyle(availability.tint)
+            .clipShape(Capsule())
+    }
+
+    private func availabilityStatus(for stat: SkillUsageStat) -> UsageAvailabilityStatus {
+        guard !installedSkillIdentifiers.contains(stat.id) else {
+            return .available
+        }
+
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let libraryPath: String
+
+        switch stat.source {
+        case .claudeCode:
+            libraryPath = stat.skillName.contains(":")
+                ? "\(home)/.claude/plugins/cache"
+                : "\(home)/.claude/skills"
+        case .codexCLI:
+            libraryPath = stat.skillName.contains(":")
+                ? "\(home)/.codex/plugins/cache"
+                : "\(home)/.codex/skills"
+        }
+
+        if FileManager.default.fileExists(atPath: libraryPath) {
+            return .missingOnDisk
+        }
+
+        return .notInstalled
     }
 
     private func relativeDate(_ date: Date) -> String {
