@@ -169,58 +169,66 @@ struct MenuBarView: View {
             contentListView
 
             // Footer card
-            HStack {
-                Button(action: {
-                    store.refresh()
-                    usageTracker.refresh()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12))
-                        Text("Refresh")
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Button(action: {
+                        store.refresh()
+                        usageTracker.refresh()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 12))
+                            Text("Refresh")
+                                .font(.system(size: 12))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Refresh skills & stats")
+
+                    Spacer()
+
+                    Button(action: { showUsageStats = true }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chart.bar")
+                                .font(.system(size: 12))
+                            Text("Stats")
+                                .font(.system(size: 12))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Usage statistics")
+
+                    Spacer()
+
+                    Text("⌥⇧S")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+
+                    Spacer()
+
+                    Button(action: { showAbout = true }) {
+                        Image(systemName: "info.circle")
                             .font(.system(size: 12))
                     }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Refresh skills & stats")
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("About SkillsBar")
 
-                Spacer()
-
-                Button(action: { showUsageStats = true }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chart.bar")
-                            .font(.system(size: 12))
-                        Text("Stats")
+                    Button(action: { NSApplication.shared.terminate(nil) }) {
+                        Text("Quit")
                             .font(.system(size: 12))
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Usage statistics")
 
-                Spacer()
-
-                Text("⌥⇧S")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-
-                Spacer()
-
-                Button(action: { showAbout = true }) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 12))
+                if let lastRefreshText {
+                    Text(lastRefreshText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("About SkillsBar")
-
-                Button(action: { NSApplication.shared.terminate(nil) }) {
-                    Text("Quit")
-                        .font(.system(size: 12))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -1096,6 +1104,17 @@ struct MenuBarView: View {
         case .codex:
             return "Search skills or plugins..."
         }
+    }
+
+    private var footerLastRefreshDate: Date? {
+        [store.lastRefreshDate, usageTracker.lastRefreshDate]
+            .compactMap { $0 }
+            .max()
+    }
+
+    private var lastRefreshText: String? {
+        guard let footerLastRefreshDate else { return nil }
+        return "Updated \(footerLastRefreshDate.formatted(date: .omitted, time: .shortened))"
     }
 
     // MARK: - Keyboard Navigation

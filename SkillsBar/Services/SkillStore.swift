@@ -7,6 +7,7 @@ final class SkillStore: ObservableObject {
     @Published var agentGroups: [AgentGroup] = []
     @Published var plugins: [Plugin] = []
     @Published var collections: [SkillCollection] = []
+    @Published var lastRefreshDate: Date?
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
     @Published var pinnedOrder: [String] = []
@@ -419,6 +420,7 @@ final class SkillStore: ObservableObject {
             self.groups = self.buildGroups(from: scanned.skills)
             self.agentGroups = self.buildAgentGroups(from: scanned.agents)
             self.plugins = scanned.plugins
+            self.lastRefreshDate = Date()
         }
     }
 
