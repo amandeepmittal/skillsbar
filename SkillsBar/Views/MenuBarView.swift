@@ -1211,6 +1211,11 @@ struct MenuBarView: View {
         let isOnMainList = selectedSkill == nil && selectedAgent == nil && selectedPlugin == nil && !showAbout && !showUsageStats
 
         switch Int(event.keyCode) {
+        case 123: // Left arrow
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) else {
+                return event
+            }
+            return handleBackNavigation() ? nil : event
         case 125: // Down arrow
             guard isOnMainList else { return event }
             moveHighlight(by: 1)
@@ -1254,7 +1259,7 @@ struct MenuBarView: View {
         }
     }
 
-    private func handleEscape() -> Bool {
+    private func handleBackNavigation() -> Bool {
         if selectedSkill != nil {
             selectedSkill = nil
             return true
@@ -1273,6 +1278,13 @@ struct MenuBarView: View {
         }
         if showUsageStats {
             showUsageStats = false
+            return true
+        }
+        return false
+    }
+
+    private func handleEscape() -> Bool {
+        if handleBackNavigation() {
             return true
         }
         return clearSearch()
