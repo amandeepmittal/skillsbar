@@ -5,6 +5,7 @@ private let codexColor = Color.purple
 private let collectionsColor = Color.blue
 private let cardBackground = Color.primary.opacity(0.10)
 private let cardRadius: CGFloat = 12
+private let whatsNewTimeWindow: TimeInterval = 7 * 24 * 60 * 60
 
 struct MenuBarView: View {
     @ObservedObject var store: SkillStore
@@ -16,8 +17,18 @@ struct MenuBarView: View {
     @State private var showAbout = false
     @State private var showUsageStats = false
     @State private var collapsedSections: Set<String> = {
-        let saved = UserDefaults.standard.stringArray(forKey: "collapsedSections") ?? []
-        return Set(saved)
+        let defaults = UserDefaults.standard
+        let saved = Set(defaults.stringArray(forKey: "collapsedSections") ?? [])
+        let whatsNewSections: Set<String> = ["claude-whats-new", "codex-whats-new"]
+
+        guard !defaults.bool(forKey: "hasInitializedWhatsNewSections") else {
+            return saved
+        }
+
+        let seeded = saved.union(whatsNewSections)
+        defaults.set(Array(seeded), forKey: "collapsedSections")
+        defaults.set(true, forKey: "hasInitializedWhatsNewSections")
+        return seeded
     }()
     @State private var highlightedItemId: String?
     @State private var keyMonitor: Any?
@@ -38,6 +49,47 @@ struct MenuBarView: View {
             case .skill(let s): return s.id
             case .agent(let a): return a.id
             case .plugin(let p): return p.id
+            }
+        }
+    }
+
+    private enum RecentContentItem: Identifiable {
+        case skill(Skill)
+        case plugin(Plugin)
+
+        var id: String {
+            switch self {
+            case .skill(let skill):
+                return "recent-skill-\(skill.id)"
+            case .plugin(let plugin):
+                return "recent-plugin-\(plugin.id)"
+            }
+        }
+
+        var modifiedDate: Date {
+            switch self {
+            case .skill(let skill):
+                return skill.lastModified ?? .distantPast
+            case .plugin(let plugin):
+                return plugin.lastModified ?? .distantPast
+            }
+        }
+
+        var sortPriority: Int {
+            switch self {
+            case .plugin:
+                return 0
+            case .skill:
+                return 1
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .skill(let skill):
+                return skill.displayName
+            case .plugin(let plugin):
+                return plugin.displayName
             }
         }
     }
@@ -269,10 +321,13 @@ struct MenuBarView: View {
             return AnyView(collectionsListView)
         }
 
-        let tabGroups = store.groupsForTab(selectedTab)
+        let recentSkills = recentSkills(for: selectedTab)
+        let recentPlugins = recentPlugins(for: selectedTab)
+        let recentItems = recentContentItems(skills: recentSkills, plugins: recentPlugins)
+        let tabGroups = displayedSkillGroups(for: selectedTab, excluding: recentSkills)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
-        let plugins = selectedTab == .codex ? store.filteredPlugins : []
-        let hasContent = !tabGroups.isEmpty || !agentGroups.isEmpty || !plugins.isEmpty
+        let plugins = displayedPlugins(for: selectedTab, excluding: recentPlugins)
+        let hasContent = !recentItems.isEmpty || !tabGroups.isEmpty || !agentGroups.isEmpty || !plugins.isEmpty
 
         return AnyView(Group {
             if !hasContent {
@@ -308,6 +363,11 @@ struct MenuBarView: View {
                                     }
                                 }
 
+                                if !recentItems.isEmpty,
+                                   let recentSectionID = whatsNewSectionID(for: selectedTab) {
+                                    whatsNewSectionCard(recentItems, sectionID: recentSectionID)
+                                }
+
                                 // Plugin Skills
                                 ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
                                     ForEach(group.sections.filter { $0.id == "claude-plugin" }) { section in
@@ -334,6 +394,11 @@ struct MenuBarView: View {
                                     ForEach(group.sections.filter { $0.id == "codex-user" }) { section in
                                         skillSectionCard(group: group, section: section)
                                     }
+                                }
+
+                                if !recentItems.isEmpty,
+                                   let recentSectionID = whatsNewSectionID(for: selectedTab) {
+                                    whatsNewSectionCard(recentItems, sectionID: recentSectionID)
                                 }
 
                                 // Installed Plugins
@@ -370,6 +435,56 @@ struct MenuBarView: View {
                 }
             }
         })
+    }
+
+    // MARK: - What's New
+
+    private func whatsNewSectionCard(_ items: [RecentContentItem], sectionID: String) -> some View {
+        let collapsed = isSectionCollapsed(sectionID)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { toggleSection(sectionID) } }) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.teal)
+                    Text("WHAT'S NEW")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
+                    countBadge("\(items.count)")
+                    countBadge("7d", secondary: true)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, collapsed ? 8 : 4)
+
+            if !collapsed {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 {
+                        Divider()
+                            .padding(.leading, 44)
+                    }
+
+                    switch item {
+                    case .skill(let skill):
+                        skillRow(skill: skill, index: index, isPinned: false)
+                    case .plugin(let plugin):
+                        pluginRow(plugin: plugin)
+                    }
+                }
+            }
+        }
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
     }
 
     // MARK: - Skill Section Card
@@ -1100,6 +1215,94 @@ struct MenuBarView: View {
         }
     }
 
+    private func recentSkills(for tab: SkillStore.SkillTab) -> [Skill] {
+        guard tab != .collections else { return [] }
+
+        let allSkills = store.groupsForTab(tab)
+            .filter { $0.id != "pinned" }
+            .flatMap { $0.sections.flatMap { $0.skills } }
+
+        return allSkills
+            .filter { isWithinWhatsNewWindow($0.lastModified) }
+            .sorted(by: sortRecentSkills)
+    }
+
+    private func recentPlugins(for tab: SkillStore.SkillTab) -> [Plugin] {
+        guard tab == .codex else { return [] }
+
+        return store.filteredPlugins
+            .filter { isWithinWhatsNewWindow($0.lastModified) }
+            .sorted(by: sortRecentPlugins)
+    }
+
+    private func recentContentItems(skills: [Skill], plugins: [Plugin]) -> [RecentContentItem] {
+        (plugins.map { RecentContentItem.plugin($0) } + skills.map { RecentContentItem.skill($0) })
+            .sorted(by: sortRecentItems)
+    }
+
+    private func displayedSkillGroups(for tab: SkillStore.SkillTab, excluding recentSkills: [Skill]) -> [SkillGroup] {
+        let groups = store.groupsForTab(tab)
+        let recentPaths = Set(recentSkills.map { $0.path })
+
+        guard !recentPaths.isEmpty else { return groups }
+
+        return groups.compactMap { group in
+            guard group.id != "pinned" else { return group }
+
+            let sections = group.sections.compactMap { section in
+                let visibleSkills = section.skills.filter { !recentPaths.contains($0.path) }
+                return visibleSkills.isEmpty ? nil : SkillSection(id: section.id, title: section.title, skills: visibleSkills)
+            }
+
+            return sections.isEmpty ? nil : SkillGroup(id: group.id, title: group.title, sections: sections)
+        }
+    }
+
+    private func displayedPlugins(for tab: SkillStore.SkillTab, excluding recentPlugins: [Plugin]) -> [Plugin] {
+        guard tab == .codex else { return [] }
+
+        let recentPluginPaths = Set(recentPlugins.map { $0.path })
+        guard !recentPluginPaths.isEmpty else { return store.filteredPlugins }
+
+        return store.filteredPlugins.filter { !recentPluginPaths.contains($0.path) }
+    }
+
+    private func whatsNewSectionID(for tab: SkillStore.SkillTab) -> String? {
+        switch tab {
+        case .claudeCode:
+            return "claude-whats-new"
+        case .codex:
+            return "codex-whats-new"
+        case .collections:
+            return nil
+        }
+    }
+
+    private func isWithinWhatsNewWindow(_ date: Date?) -> Bool {
+        guard let date else { return false }
+        return Date().timeIntervalSince(date) <= whatsNewTimeWindow
+    }
+
+    private func sortRecentSkills(_ lhs: Skill, _ rhs: Skill) -> Bool {
+        let lhsDate = lhs.lastModified ?? .distantPast
+        let rhsDate = rhs.lastModified ?? .distantPast
+        if lhsDate != rhsDate { return lhsDate > rhsDate }
+        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+    }
+
+    private func sortRecentPlugins(_ lhs: Plugin, _ rhs: Plugin) -> Bool {
+        let lhsDate = lhs.lastModified ?? .distantPast
+        let rhsDate = rhs.lastModified ?? .distantPast
+        if lhsDate != rhsDate { return lhsDate > rhsDate }
+        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+    }
+
+    private func sortRecentItems(_ lhs: RecentContentItem, _ rhs: RecentContentItem) -> Bool {
+        if lhs.modifiedDate != rhs.modifiedDate { return lhs.modifiedDate > rhs.modifiedDate }
+        if lhs.sortPriority != rhs.sortPriority { return lhs.sortPriority < rhs.sortPriority }
+        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+    }
+
     private var footerLastRefreshDate: Date? {
         [store.lastRefreshDate, usageTracker.lastRefreshDate]
             .compactMap { $0 }
@@ -1147,9 +1350,12 @@ struct MenuBarView: View {
             return items
         }
 
-        let tabGroups = store.groupsForTab(selectedTab)
+        let recentSkills = recentSkills(for: selectedTab)
+        let recentPlugins = recentPlugins(for: selectedTab)
+        let recentItems = recentContentItems(skills: recentSkills, plugins: recentPlugins)
+        let tabGroups = displayedSkillGroups(for: selectedTab, excluding: recentSkills)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
-        let plugins = selectedTab == .codex ? store.filteredPlugins : []
+        let plugins = displayedPlugins(for: selectedTab, excluding: recentPlugins)
 
         func addSkills(from groups: [SkillGroup], groupFilter: (SkillGroup) -> Bool, sectionFilter: ((SkillSection) -> Bool)? = nil) {
             for group in groups where groupFilter(group) {
@@ -1177,12 +1383,34 @@ struct MenuBarView: View {
         if selectedTab == .claudeCode {
             addSkills(from: tabGroups, groupFilter: { $0.id == "pinned" })
             addAgents(from: agentGroups, groupFilter: { $0.id == "pinned" })
+            if let recentSectionID = whatsNewSectionID(for: selectedTab),
+               !isSectionCollapsed(recentSectionID) {
+                for item in recentItems {
+                    switch item {
+                    case .skill(let skill):
+                        items.append(.skill(skill))
+                    case .plugin(let plugin):
+                        items.append(.plugin(plugin))
+                    }
+                }
+            }
             addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-user" })
             addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-user" })
             addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-plugin" })
             addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-plugin" })
         } else {
             addSkills(from: tabGroups, groupFilter: { $0.id == "pinned" })
+            if let recentSectionID = whatsNewSectionID(for: selectedTab),
+               !isSectionCollapsed(recentSectionID) {
+                for item in recentItems {
+                    switch item {
+                    case .skill(let skill):
+                        items.append(.skill(skill))
+                    case .plugin(let plugin):
+                        items.append(.plugin(plugin))
+                    }
+                }
+            }
             addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "codex-user" })
             if !isSectionCollapsed("codex-installed-plugins") {
                 items.append(contentsOf: plugins.map { .plugin($0) })
