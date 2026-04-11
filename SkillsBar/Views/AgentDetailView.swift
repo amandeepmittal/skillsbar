@@ -6,6 +6,8 @@ struct AgentDetailView: View {
     let onBack: () -> Void
     let onDelete: (Agent) -> Void
     let onTogglePin: (Agent) -> Void
+    let onCopyPath: () -> Void
+    let onCopyIdentifier: () -> Void
 
     @State private var showDeleteConfirmation = false
     @State private var showFullContent = false
@@ -216,8 +218,7 @@ struct AgentDetailView: View {
                                 .textSelection(.enabled)
                             Spacer()
                             Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(agent.identifier, forType: .string)
+                                onCopyIdentifier()
                             } label: {
                                 Image(systemName: "doc.on.doc")
                                     .font(.system(size: 12))
@@ -300,8 +301,7 @@ struct AgentDetailView: View {
     }
 
     private func copyPath() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(agent.path, forType: .string)
+        onCopyPath()
     }
 
     private func revealInFinder() {

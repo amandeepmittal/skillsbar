@@ -26,6 +26,8 @@ struct MenuBarView: View {
     @State private var pendingCollectionSkillPath: String?
     @State private var editingCollectionID: UUID?
     @State private var editingCollectionName = ""
+    @State private var copyToastMessage: String?
+    @State private var copyToastDismissWorkItem: DispatchWorkItem?
 
     private enum ListItem {
         case skill(Skill)
@@ -60,6 +62,12 @@ struct MenuBarView: View {
                     },
                     onTogglePin: { agent in
                         store.togglePinAgent(agent)
+                    },
+                    onCopyPath: {
+                        copyToPasteboard(agent.path, feedback: "Copied path")
+                    },
+                    onCopyIdentifier: {
+                        copyToPasteboard(agent.identifier, feedback: "Copied identifier")
                     }
                 )
             } else if let plugin = selectedPlugin {
@@ -67,6 +75,9 @@ struct MenuBarView: View {
                     plugin: plugin,
                     includedSkills: store.skills(for: plugin),
                     onBack: { selectedPlugin = nil },
+                    onCopyPath: {
+                        copyToPasteboard(plugin.path, feedback: "Copied path")
+                    },
                     onSelectSkill: { skill in
                         selectedPlugin = nil
                         selectedSkill = skill
@@ -91,6 +102,12 @@ struct MenuBarView: View {
                     },
                     onCreateCollection: { skill in
                         startCreatingCollection(for: skill)
+                    },
+                    onCopyPath: {
+                        copyToPasteboard(skill.path, feedback: "Copied path")
+                    },
+                    onCopyCommand: {
+                        copyToPasteboard(skill.triggerCommand, feedback: "Copied command")
                     }
                 )
             } else {
@@ -98,11 +115,23 @@ struct MenuBarView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .bottom) {
+            if let copyToastMessage {
+                CopyToastView(message: copyToastMessage)
+                    .padding(.bottom, 14)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
         .onAppear {
             highlightedItemId = nil
             installKeyboardMonitor()
         }
-        .onDisappear { removeKeyboardMonitor() }
+        .onDisappear {
+            removeKeyboardMonitor()
+            copyToastDismissWorkItem?.cancel()
+            copyToastDismissWorkItem = nil
+        }
         .onChange(of: selectedTab) { _, newTab in
             highlightedItemId = nil
             if newTab != .collections {
@@ -458,12 +487,10 @@ struct MenuBarView: View {
             }
             Divider()
             Button("Copy Command") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(skill.triggerCommand, forType: .string)
+                copyToPasteboard(skill.triggerCommand, feedback: "Copied command")
             }
             Button("Copy Path") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(skill.path, forType: .string)
+                copyToPasteboard(skill.path, feedback: "Copied path")
             }
             Divider()
             Button("Delete Skill", role: .destructive) {
@@ -538,8 +565,7 @@ struct MenuBarView: View {
             }
             Divider()
             Button("Copy Path") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(plugin.path, forType: .string)
+                copyToPasteboard(plugin.path, feedback: "Copied path")
             }
         }
     }
@@ -918,8 +944,7 @@ struct MenuBarView: View {
             }
             Divider()
             Button("Copy Path") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(agent.path, forType: .string)
+                copyToPasteboard(agent.path, feedback: "Copied path")
             }
             Divider()
             Button("Delete Agent", role: .destructive) {
@@ -1266,6 +1291,30 @@ struct MenuBarView: View {
         return clearSearch()
     }
 
+    private func copyToPasteboard(_ value: String, feedback: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        showCopyToast(feedback)
+    }
+
+    private func showCopyToast(_ message: String) {
+        copyToastDismissWorkItem?.cancel()
+
+        withAnimation(.easeInOut(duration: 0.18)) {
+            copyToastMessage = message
+        }
+
+        let workItem = DispatchWorkItem {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                copyToastMessage = nil
+            }
+            copyToastDismissWorkItem = nil
+        }
+
+        copyToastDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1, execute: workItem)
+    }
+
     @discardableResult
     private func clearSearch() -> Bool {
         guard !store.searchText.isEmpty else { return false }
@@ -1276,5 +1325,23 @@ struct MenuBarView: View {
     private var installedSkillIdentifiers: Set<String> {
         let allSkills = store.groups.flatMap { $0.sections.flatMap { $0.skills } }
         return Set(allSkills.map { UsageTracker.identifier(for: $0) })
+    }
+}
+
+private struct CopyToastView: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.96))
+            .clipShape(Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
 }

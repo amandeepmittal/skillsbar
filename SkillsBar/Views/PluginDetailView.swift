@@ -4,6 +4,7 @@ struct PluginDetailView: View {
     let plugin: Plugin
     let includedSkills: [Skill]
     let onBack: () -> Void
+    let onCopyPath: () -> Void
     let onSelectSkill: (Skill) -> Void
 
     private let cardBg = Color.primary.opacity(0.10)
@@ -270,8 +271,7 @@ struct PluginDetailView: View {
     }
 
     private func copyPath() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(plugin.path, forType: .string)
+        onCopyPath()
     }
 
     private func revealInFinder() {

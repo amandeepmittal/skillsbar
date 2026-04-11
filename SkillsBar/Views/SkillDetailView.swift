@@ -11,6 +11,8 @@ struct SkillDetailView: View {
     let onTogglePin: (Skill) -> Void
     let onToggleCollectionMembership: (SkillCollection) -> Void
     let onCreateCollection: (Skill) -> Void
+    let onCopyPath: () -> Void
+    let onCopyCommand: () -> Void
 
     @State private var showDeleteConfirmation = false
     @State private var showFullContent = false
@@ -167,8 +169,7 @@ struct SkillDetailView: View {
                                 .textSelection(.enabled)
                             Spacer()
                             Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(skill.triggerCommand, forType: .string)
+                                onCopyCommand()
                             } label: {
                                 Image(systemName: "doc.on.doc")
                                     .font(.system(size: 12))
@@ -447,8 +448,7 @@ struct SkillDetailView: View {
     }
 
     private func copyPath() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(skill.path, forType: .string)
+        onCopyPath()
     }
 
     private func revealInFinder() {
