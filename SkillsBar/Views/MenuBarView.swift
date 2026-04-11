@@ -138,7 +138,7 @@ struct MenuBarView: View {
                     tabButton(tab)
                 }
             }
-            .padding(4)
+            .padding(3)
             .background(cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: cardRadius))
             .padding(.horizontal, 12)
@@ -989,12 +989,12 @@ struct MenuBarView: View {
                 Text("\(count)")
                     .font(.system(size: 11, weight: .medium))
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 1)
                     .background(isSelected ? color.opacity(0.2) : Color.secondary.opacity(0.1))
                     .clipShape(Capsule())
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
             .frame(maxWidth: .infinity)
             .background(isSelected ? color.opacity(0.12) : Color.clear)
             .foregroundStyle(isSelected ? color : .secondary)
