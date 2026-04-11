@@ -3,7 +3,7 @@ import SwiftUI
 struct AboutView: View {
     @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
-    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.12"
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.0"
     private let heroCornerRadius: CGFloat = 22
     private let sectionCornerRadius: CGFloat = 16
     private let fileManager = FileManager.default
@@ -74,8 +74,6 @@ struct AboutView: View {
                             .font(.system(size: 13, design: .monospaced))
                             .foregroundStyle(.primary)
                     }
-
-                    sortCard
 
                     footerLinks
                 }
@@ -153,18 +151,6 @@ struct AboutView: View {
             ("~/.codex/skills/", homeURL.appendingPathComponent(".codex/skills", isDirectory: true)),
             ("~/.codex/plugins/cache/", homeURL.appendingPathComponent(".codex/plugins/cache", isDirectory: true))
         ]
-    }
-
-    private var sortCard: some View {
-        infoSection(icon: "arrow.up.arrow.down", title: "Default Sort") {
-            Picker("", selection: $skillStore.sortOption) {
-                ForEach(SkillSortOption.allCases, id: \.self) { option in
-                    Text(option.rawValue).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-        }
     }
 
     private var footerLinks: some View {

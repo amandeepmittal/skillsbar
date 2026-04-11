@@ -38,6 +38,8 @@
 		A10001029 /* PluginScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002030; };
 		A10001030 /* PluginRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002031; };
 		A10001031 /* PluginDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002032; };
+		A10001032 /* AppAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002033; };
+		A10001033 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002034; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -74,6 +76,8 @@
 		A10002030 /* PluginScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginScanner.swift; sourceTree = "<group>"; };
 		A10002031 /* PluginRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginRowView.swift; sourceTree = "<group>"; };
 		A10002032 /* PluginDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDetailView.swift; sourceTree = "<group>"; };
+		A10002033 /* AppAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAppearance.swift; sourceTree = "<group>"; };
+		A10002034 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,6 +126,7 @@
 				A10002023 /* SkillUsageStat.swift */,
 				A10002026 /* SkillSortOption.swift */,
 				A10002027 /* SkillCollection.swift */,
+				A10002033 /* AppAppearance.swift */,
 				A10002029 /* Plugin.swift */,
 			);
 			path = Models;
@@ -149,6 +154,7 @@
 				A10002011 /* SkillDetailView.swift */,
 				A10002012 /* SectionHeaderView.swift */,
 				A10002015 /* AboutView.swift */,
+				A10002034 /* SettingsView.swift */,
 				A10002021 /* AgentRowView.swift */,
 				A10002022 /* AgentDetailView.swift */,
 				A10002025 /* UsageStatsView.swift */,
@@ -265,6 +271,8 @@
 				A10001029 /* PluginScanner.swift in Sources */,
 				A10001030 /* PluginRowView.swift in Sources */,
 				A10001031 /* PluginDetailView.swift in Sources */,
+				A10001032 /* AppAppearance.swift in Sources */,
+				A10001033 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -406,7 +414,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.12;
+				MARKETING_VERSION = 1.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.amanhimself.skillsbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -433,7 +441,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.12;
+				MARKETING_VERSION = 1.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.amanhimself.skillsbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

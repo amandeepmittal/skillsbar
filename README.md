@@ -23,7 +23,7 @@
   &nbsp;&nbsp;
   <img src="screenshots/usage-stats.png" width="320" alt="Usage stats" />
   &nbsp;&nbsp;
-  <img src="screenshots/about-view.png" width="320" alt="About view with sort options" />
+  <img src="screenshots/about-view.png" width="320" alt="About view with watched directories" />
   &nbsp;&nbsp;
   <img src="screenshots/collections-1.png" width="320" alt="Collections view" />
   &nbsp;&nbsp;
@@ -37,7 +37,8 @@
 - **Tabbed browsing** - separate tabs for Claude Code, Codex, and Collections with count badges
 - **Search** - filter skills, plugins, and collections by name, description, or trigger
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
-- **Sort options** - sort skills by A-Z, Recently Modified, or Most Used (persisted across restarts)
+- **Settings** - choose whether to show What's New, switch between system, light, and dark appearance, and control the default sort from one place
+- **Sort options** - sort skills by A-Z, Recently Modified, or Most Used, with the selected order persisted across restarts
 - **Collections** - create custom cross-source groups that can mix Claude Code and Codex skills in one saved view
 - **Codex plugin browsing** - browse installed Codex plugins with version, publisher, capabilities, included skills, and quick open/reveal actions
 - **What's New** - spotlight skills and installed plugins changed in the last 7 days in a dedicated section
@@ -47,7 +48,7 @@
 - **Full content preview** - expandable section to view the raw SKILL.md body
 - **Quick actions** - open in VS Code, open in default editor, copy path, reveal in Finder, and manage items from the list
 - **Right-click context menu** - pin, add to collections, open, copy, and delete directly from the list
-- **About & utilities** - view watched directories, library counts, default sort, and reveal watched folders directly in Finder from the About screen
+- **About & utilities** - view watched directories, library counts, and reveal watched folders directly in Finder from the About screen
 - **Global hotkey** - toggle the popover from anywhere with `Option + Shift + S`
 - **Agent browsing** - browse Claude Code sub-agents (user and plugin) with model, color, and tools metadata
 - **Live updates** - FSEvents directory watcher auto-refreshes when skills, plugins, or agents are added or removed

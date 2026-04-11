@@ -14,6 +14,9 @@ struct MenuBarView: View {
     @State private var selectedAgent: Agent?
     @State private var selectedPlugin: Plugin?
     @AppStorage("selectedTab") private var selectedTab: SkillStore.SkillTab = .claudeCode
+    @AppStorage(AppPreferenceKey.preferredAppearance) private var preferredAppearanceRaw = AppAppearance.system.rawValue
+    @AppStorage(AppPreferenceKey.showsWhatsNewSection) private var showsWhatsNewSection = true
+    @State private var showSettings = false
     @State private var showAbout = false
     @State private var showUsageStats = false
     @State private var collapsedSections: Set<String> = {
@@ -96,7 +99,9 @@ struct MenuBarView: View {
 
     var body: some View {
         Group {
-            if showAbout {
+            if showSettings {
+                SettingsView(skillStore: store, onBack: { showSettings = false })
+            } else if showAbout {
                 AboutView(skillStore: store, onBack: { showAbout = false })
             } else if showUsageStats {
                 UsageStatsView(
@@ -167,6 +172,7 @@ struct MenuBarView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .preferredColorScheme(preferredAppearance.colorScheme)
         .overlay(alignment: .bottom) {
             if let copyToastMessage {
                 CopyToastView(message: copyToastMessage)
@@ -289,6 +295,14 @@ struct MenuBarView: View {
 
                 Spacer()
 
+                Button(action: { showSettings = true }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Settings")
+
                 Button(action: { showAbout = true }) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 12))
@@ -321,8 +335,8 @@ struct MenuBarView: View {
             return AnyView(collectionsListView)
         }
 
-        let recentSkills = recentSkills(for: selectedTab)
-        let recentPlugins = recentPlugins(for: selectedTab)
+        let recentSkills = showsWhatsNewSection ? recentSkills(for: selectedTab) : []
+        let recentPlugins = showsWhatsNewSection ? recentPlugins(for: selectedTab) : []
         let recentItems = recentContentItems(skills: recentSkills, plugins: recentPlugins)
         let tabGroups = displayedSkillGroups(for: selectedTab, excluding: recentSkills)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
@@ -1350,8 +1364,8 @@ struct MenuBarView: View {
             return items
         }
 
-        let recentSkills = recentSkills(for: selectedTab)
-        let recentPlugins = recentPlugins(for: selectedTab)
+        let recentSkills = showsWhatsNewSection ? recentSkills(for: selectedTab) : []
+        let recentPlugins = showsWhatsNewSection ? recentPlugins(for: selectedTab) : []
         let recentItems = recentContentItems(skills: recentSkills, plugins: recentPlugins)
         let tabGroups = displayedSkillGroups(for: selectedTab, excluding: recentSkills)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
@@ -1437,7 +1451,7 @@ struct MenuBarView: View {
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
-        let isOnMainList = selectedSkill == nil && selectedAgent == nil && selectedPlugin == nil && !showAbout && !showUsageStats
+        let isOnMainList = selectedSkill == nil && selectedAgent == nil && selectedPlugin == nil && !showSettings && !showAbout && !showUsageStats
 
         switch Int(event.keyCode) {
         case 123: // Left arrow
@@ -1501,6 +1515,10 @@ struct MenuBarView: View {
             selectedPlugin = nil
             return true
         }
+        if showSettings {
+            showSettings = false
+            return true
+        }
         if showAbout {
             showAbout = false
             return true
@@ -1523,6 +1541,10 @@ struct MenuBarView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
         showCopyToast(feedback)
+    }
+
+    private var preferredAppearance: AppAppearance {
+        AppAppearance(rawValue: preferredAppearanceRaw) ?? .system
     }
 
     private func showCopyToast(_ message: String) {
