@@ -1207,9 +1207,9 @@ struct MenuBarView: View {
     private var searchPlaceholder: String {
         switch selectedTab {
         case .collections:
-            return "Search collections or skills..."
+            return "Search collections or included skills..."
         case .claudeCode:
-            return "Search skills..."
+            return "Search skills or agents..."
         case .codex:
             return "Search skills or plugins..."
         }
