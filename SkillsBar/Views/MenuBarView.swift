@@ -12,7 +12,7 @@ struct MenuBarView: View {
     @State private var selectedSkill: Skill?
     @State private var selectedAgent: Agent?
     @State private var selectedPlugin: Plugin?
-    @State private var selectedTab: SkillStore.SkillTab = .claudeCode
+    @AppStorage("selectedTab") private var selectedTab: SkillStore.SkillTab = .claudeCode
     @State private var showAbout = false
     @State private var showUsageStats = false
     @State private var collapsedSections: Set<String> = {
