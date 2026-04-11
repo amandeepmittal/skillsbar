@@ -117,9 +117,12 @@ struct MenuBarView: View {
     private var mainListView: some View {
         VStack(spacing: 8) {
             // Header
-            HStack {
+            HStack(spacing: 8) {
                 Text("SkillsBar")
                     .font(.system(size: 16, weight: .bold))
+                Text("⌥⇧S")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.tertiary)
                 Spacer()
                 Text("\(store.totalItemCount) items")
                     .font(.system(size: 13))
@@ -169,66 +172,56 @@ struct MenuBarView: View {
             contentListView
 
             // Footer card
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Button(action: {
-                        store.refresh()
-                        usageTracker.refresh()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 12))
-                            Text("Refresh")
-                                .font(.system(size: 12))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Refresh skills & stats")
-
-                    Spacer()
-
-                    Button(action: { showUsageStats = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chart.bar")
-                                .font(.system(size: 12))
-                            Text("Stats")
-                                .font(.system(size: 12))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Usage statistics")
-
-                    Spacer()
-
-                    Text("⌥⇧S")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-
-                    Spacer()
-
-                    Button(action: { showAbout = true }) {
-                        Image(systemName: "info.circle")
+            HStack {
+                Button(action: {
+                    store.refresh()
+                    usageTracker.refresh()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12))
+                        Text("Refresh")
                             .font(.system(size: 12))
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("About SkillsBar")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Refresh skills & stats")
 
-                    Button(action: { NSApplication.shared.terminate(nil) }) {
-                        Text("Quit")
+                Spacer()
+
+                Button(action: { showUsageStats = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chart.bar")
+                            .font(.system(size: 12))
+                        Text("Stats")
                             .font(.system(size: 12))
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Usage statistics")
 
-                if let lastRefreshText {
-                    Text(lastRefreshText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                Spacer()
+
+                footerStatusView
+
+                Spacer()
+
+                Button(action: { showAbout = true }) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 12))
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("About SkillsBar")
+
+                Button(action: { NSApplication.shared.terminate(nil) }) {
+                    Text("Quit")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -1112,9 +1105,31 @@ struct MenuBarView: View {
             .max()
     }
 
-    private var lastRefreshText: String? {
-        guard let footerLastRefreshDate else { return nil }
-        return "Updated \(footerLastRefreshDate.formatted(date: .omitted, time: .shortened))"
+    @ViewBuilder
+    private var footerStatusView: some View {
+        if let footerLastRefreshDate {
+            TimelineView(.periodic(from: footerLastRefreshDate, by: 60)) { context in
+                Text(refreshStatusText(since: footerLastRefreshDate, now: context.date))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func refreshStatusText(since date: Date, now: Date) -> String {
+        let elapsed = max(0, now.timeIntervalSince(date))
+
+        if elapsed < 5 * 60 {
+            return "Updated just now"
+        }
+        if elapsed < 60 * 60 {
+            return "Updated \(Int(elapsed / 60))m ago"
+        }
+        if elapsed < 24 * 60 * 60 {
+            return "Updated \(Int(elapsed / 3600))h ago"
+        }
+
+        return "Updated \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
     // MARK: - Keyboard Navigation
