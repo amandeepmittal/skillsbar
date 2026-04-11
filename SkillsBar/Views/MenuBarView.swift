@@ -148,8 +148,11 @@ struct MenuBarView: View {
                 TextField(searchPlaceholder, text: $store.searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
+                    .onExitCommand {
+                        _ = clearSearch()
+                    }
                 if !store.searchText.isEmpty {
-                    Button(action: { store.searchText = "" }) {
+                    Button(action: { _ = clearSearch() }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.tertiary)
                             .font(.system(size: 13))
@@ -1238,11 +1241,14 @@ struct MenuBarView: View {
             showUsageStats = false
             return true
         }
-        if !store.searchText.isEmpty {
-            store.searchText = ""
-            return true
-        }
-        return false
+        return clearSearch()
+    }
+
+    @discardableResult
+    private func clearSearch() -> Bool {
+        guard !store.searchText.isEmpty else { return false }
+        store.searchText = ""
+        return true
     }
 
     private var installedSkillIdentifiers: Set<String> {
