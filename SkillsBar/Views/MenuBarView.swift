@@ -11,6 +11,7 @@ struct MenuBarView: View {
     @ObservedObject var usageTracker: UsageTracker
     @State private var selectedSkill: Skill?
     @State private var selectedAgent: Agent?
+    @State private var selectedPlugin: Plugin?
     @State private var selectedTab: SkillStore.SkillTab = .claudeCode
     @State private var showAbout = false
     @State private var showUsageStats = false
@@ -29,10 +30,12 @@ struct MenuBarView: View {
     private enum ListItem {
         case skill(Skill)
         case agent(Agent)
+        case plugin(Plugin)
         var id: String {
             switch self {
             case .skill(let s): return s.id
             case .agent(let a): return a.id
+            case .plugin(let p): return p.id
             }
         }
     }
@@ -57,6 +60,16 @@ struct MenuBarView: View {
                     },
                     onTogglePin: { agent in
                         store.togglePinAgent(agent)
+                    }
+                )
+            } else if let plugin = selectedPlugin {
+                PluginDetailView(
+                    plugin: plugin,
+                    includedSkills: store.skills(for: plugin),
+                    onBack: { selectedPlugin = nil },
+                    onSelectSkill: { skill in
+                        selectedPlugin = nil
+                        selectedSkill = skill
                     }
                 )
             } else if let skill = selectedSkill {
@@ -108,7 +121,7 @@ struct MenuBarView: View {
                 Text("SkillsBar")
                     .font(.system(size: 16, weight: .bold))
                 Spacer()
-                Text("\(store.totalItemCount) skills & agents")
+                Text("\(store.totalItemCount) items")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
@@ -225,7 +238,8 @@ struct MenuBarView: View {
 
         let tabGroups = store.groupsForTab(selectedTab)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
-        let hasContent = !tabGroups.isEmpty || !agentGroups.isEmpty
+        let plugins = selectedTab == .codex ? store.filteredPlugins : []
+        let hasContent = !tabGroups.isEmpty || !agentGroups.isEmpty || !plugins.isEmpty
 
         return AnyView(Group {
             if !hasContent {
@@ -275,9 +289,35 @@ struct MenuBarView: View {
                                     }
                                 }
                             } else {
-                                // Codex tab - just skills
-                                ForEach(tabGroups) { group in
+                                // Pinned skills first
+                                ForEach(tabGroups.filter { $0.id == "pinned" }) { group in
                                     ForEach(group.sections) { section in
+                                        skillSectionCard(group: group, section: section)
+                                    }
+                                }
+
+                                // User Skills
+                                ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id == "codex-user" }) { section in
+                                        skillSectionCard(group: group, section: section)
+                                    }
+                                }
+
+                                // Installed Plugins
+                                if !plugins.isEmpty {
+                                    pluginSectionCard(plugins)
+                                }
+
+                                // Plugin Skills
+                                ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id == "codex-plugin" }) { section in
+                                        skillSectionCard(group: group, section: section)
+                                    }
+                                }
+
+                                // Built-in Skills
+                                ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id == "codex-builtin" }) { section in
                                         skillSectionCard(group: group, section: section)
                                     }
                                 }
@@ -432,6 +472,86 @@ struct MenuBarView: View {
             Divider()
             Button("Delete Skill", role: .destructive) {
                 store.deleteSkill(skill)
+            }
+        }
+    }
+
+    // MARK: - Plugin Section Card
+
+    private func pluginSectionCard(_ plugins: [Plugin]) -> some View {
+        let sectionID = "codex-installed-plugins"
+        let collapsed = isSectionCollapsed(sectionID)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { toggleSection(sectionID) } }) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    Text("INSTALLED PLUGINS")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
+                    if collapsed {
+                        Text("\(plugins.count)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, collapsed ? 8 : 4)
+
+            if !collapsed {
+                ForEach(Array(plugins.enumerated()), id: \.element.id) { index, plugin in
+                    if index > 0 {
+                        Divider()
+                            .padding(.leading, 44)
+                    }
+                    pluginRow(plugin: plugin)
+                }
+            }
+        }
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private func pluginRow(plugin: Plugin) -> some View {
+        Button(action: { selectedPlugin = plugin }) {
+            PluginRowView(
+                plugin: plugin,
+                skillCount: store.skills(for: plugin).count
+            )
+        }
+        .buttonStyle(.plain)
+        .background(highlightedItemId == plugin.id ? Color.accentColor.opacity(0.12) : Color.clear)
+        .onHover { hovering in
+            if hovering { highlightedItemId = nil }
+        }
+        .id(plugin.id)
+        .contextMenu {
+            Button("Open in VS Code") {
+                SkillStore.openPluginInVSCode(plugin)
+            }
+            Button("Open in Default Editor") {
+                SkillStore.openPluginInDefaultEditor(plugin)
+            }
+            Button("Reveal in Finder") {
+                SkillStore.revealPluginInFinder(plugin)
+            }
+            Divider()
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(plugin.path, forType: .string)
             }
         }
     }
@@ -682,6 +802,7 @@ struct MenuBarView: View {
     private func startCreatingCollection(for skill: Skill? = nil) {
         selectedSkill = nil
         selectedAgent = nil
+        selectedPlugin = nil
         showAbout = false
         showUsageStats = false
         selectedTab = .collections
@@ -887,7 +1008,7 @@ struct MenuBarView: View {
                 Image(systemName: "tray")
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
-                Text("No \(selectedTab.rawValue) skills found")
+                Text(emptyStateTitle)
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
 
@@ -906,7 +1027,7 @@ struct MenuBarView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
-                Text("No matching skills")
+                Text(searchEmptyStateTitle)
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
             }
@@ -924,9 +1045,31 @@ struct MenuBarView: View {
         case .claudeCode:
             return "Create a skill folder with a SKILL.md file in:"
         case .codex:
-            return "Install skills or create a folder with SKILL.md in:"
+            return "Install a plugin or create a folder with SKILL.md in:"
         case .collections:
             return "Create a collection to group skills across Claude Code and Codex."
+        }
+    }
+
+    private var emptyStateTitle: String {
+        switch selectedTab {
+        case .claudeCode:
+            return "No Claude Code skills found"
+        case .codex:
+            return "No Codex items found"
+        case .collections:
+            return "No collections found"
+        }
+    }
+
+    private var searchEmptyStateTitle: String {
+        switch selectedTab {
+        case .codex:
+            return "No matching skills or plugins"
+        case .claudeCode:
+            return "No matching skills"
+        case .collections:
+            return "No matching collections"
         }
     }
 
@@ -935,7 +1078,7 @@ struct MenuBarView: View {
         case .claudeCode:
             return "~/.claude/skills/"
         case .codex:
-            return "~/.codex/skills/"
+            return "~/.codex/skills/\n~/.codex/plugins/cache/"
         case .collections:
             return "Use the New Collection button above."
         }
@@ -945,8 +1088,10 @@ struct MenuBarView: View {
         switch selectedTab {
         case .collections:
             return "Search collections or skills..."
-        case .claudeCode, .codex:
+        case .claudeCode:
             return "Search skills..."
+        case .codex:
+            return "Search skills or plugins..."
         }
     }
 
@@ -966,6 +1111,7 @@ struct MenuBarView: View {
 
         let tabGroups = store.groupsForTab(selectedTab)
         let agentGroups = selectedTab == .claudeCode ? store.agentGroupsForTab() : []
+        let plugins = selectedTab == .codex ? store.filteredPlugins : []
 
         func addSkills(from groups: [SkillGroup], groupFilter: (SkillGroup) -> Bool, sectionFilter: ((SkillSection) -> Bool)? = nil) {
             for group in groups where groupFilter(group) {
@@ -998,7 +1144,13 @@ struct MenuBarView: View {
             addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-plugin" })
             addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-plugin" })
         } else {
-            addSkills(from: tabGroups, groupFilter: { _ in true })
+            addSkills(from: tabGroups, groupFilter: { $0.id == "pinned" })
+            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "codex-user" })
+            if !isSectionCollapsed("codex-installed-plugins") {
+                items.append(contentsOf: plugins.map { .plugin($0) })
+            }
+            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "codex-plugin" })
+            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "codex-builtin" })
         }
 
         return items
@@ -1019,7 +1171,7 @@ struct MenuBarView: View {
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
-        let isOnMainList = selectedSkill == nil && selectedAgent == nil && !showAbout && !showUsageStats
+        let isOnMainList = selectedSkill == nil && selectedAgent == nil && selectedPlugin == nil && !showAbout && !showUsageStats
 
         switch Int(event.keyCode) {
         case 125: // Down arrow
@@ -1061,6 +1213,7 @@ struct MenuBarView: View {
         switch item {
         case .skill(let skill): selectedSkill = skill
         case .agent(let agent): selectedAgent = agent
+        case .plugin(let plugin): selectedPlugin = plugin
         }
     }
 
@@ -1071,6 +1224,10 @@ struct MenuBarView: View {
         }
         if selectedAgent != nil {
             selectedAgent = nil
+            return true
+        }
+        if selectedPlugin != nil {
+            selectedPlugin = nil
             return true
         }
         if showAbout {

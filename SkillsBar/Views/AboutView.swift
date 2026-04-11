@@ -3,7 +3,7 @@ import SwiftUI
 struct AboutView: View {
     @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
-    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.3"
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0"
     private let heroCornerRadius: CGFloat = 22
     private let sectionCornerRadius: CGFloat = 16
 
@@ -27,35 +27,48 @@ struct AboutView: View {
 
             Divider()
 
-            VStack(spacing: 14) {
-                heroCard
+            ScrollView {
+                VStack(spacing: 14) {
+                    heroCard
 
-                infoSection(icon: "folder", title: "Watched Directories") {
-                    VStack(spacing: 0) {
-                        directoryRow("~/.claude/skills/")
-                        sectionDivider
-                        directoryRow("~/.claude/plugins/cache/")
-                        sectionDivider
-                        directoryRow("~/.codex/skills/")
-                        sectionDivider
-                        directoryRow("~/.claude/agents/")
+                    infoSection(icon: "square.grid.2x2", title: "Library Snapshot") {
+                        HStack(spacing: 10) {
+                            statPill(value: "\(skillStore.totalSkillCount)", label: "Skills")
+                            statPill(value: "\(skillStore.plugins.count)", label: "Plugins")
+                            statPill(value: "\(agentCount)", label: "Agents")
+                            statPill(value: "\(skillStore.collections.count)", label: "Collections")
+                        }
                     }
+
+                    infoSection(icon: "folder", title: "Watched Directories") {
+                        VStack(spacing: 0) {
+                            directoryRow("~/.claude/skills/")
+                            sectionDivider
+                            directoryRow("~/.claude/plugins/cache/")
+                            sectionDivider
+                            directoryRow("~/.claude/agents/")
+                            sectionDivider
+                            directoryRow("~/.codex/skills/")
+                            sectionDivider
+                            directoryRow("~/.codex/plugins/cache/")
+                        }
+                    }
+
+                    infoSection(icon: "keyboard", title: "Keyboard Shortcut") {
+                        Text("Option + Shift + S")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(.primary)
+                    }
+
+                    sortCard
+
+                    footerLinks
                 }
-
-                infoSection(icon: "keyboard", title: "Keyboard Shortcut") {
-                    Text("Option + Shift + S")
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(.primary)
-                }
-
-                sortCard
-
-                footerLinks
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+                .padding(.bottom, 18)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.aboutHeight)
     }
@@ -84,7 +97,7 @@ struct AboutView: View {
                         .clipShape(Capsule())
                 }
 
-                Text("Browse Claude Code and Codex CLI skills, agents, and collections right from your menu bar.")
+                Text("Browse Claude Code and Codex CLI skills, plugins, agents, and collections right from your menu bar.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -110,6 +123,10 @@ struct AboutView: View {
                 .stroke(Color.blue.opacity(0.10), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: heroCornerRadius))
+    }
+
+    private var agentCount: Int {
+        skillStore.agentGroups.reduce(0) { $0 + $1.totalCount }
     }
 
     private var sortCard: some View {
@@ -183,6 +200,21 @@ struct AboutView: View {
                 .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: sectionCornerRadius))
+    }
+
+    private func statPill(value: String, label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .foregroundStyle(.primary)
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func directoryRow(_ path: String) -> some View {

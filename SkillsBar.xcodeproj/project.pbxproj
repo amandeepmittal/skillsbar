@@ -34,6 +34,10 @@
 		A10001025 /* SkillSortOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002026; };
 		A10001026 /* SkillCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002027; };
 		A10001027 /* SkillsBarLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002028; };
+		A10001028 /* Plugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002029; };
+		A10001029 /* PluginScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002030; };
+		A10001030 /* PluginRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002031; };
+		A10001031 /* PluginDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002032; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +70,10 @@
 		A10002026 /* SkillSortOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillSortOption.swift; sourceTree = "<group>"; };
 		A10002027 /* SkillCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillCollection.swift; sourceTree = "<group>"; };
 		A10002028 /* SkillsBarLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsBarLayout.swift; sourceTree = "<group>"; };
+		A10002029 /* Plugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plugin.swift; sourceTree = "<group>"; };
+		A10002030 /* PluginScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginScanner.swift; sourceTree = "<group>"; };
+		A10002031 /* PluginRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginRowView.swift; sourceTree = "<group>"; };
+		A10002032 /* PluginDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,6 +122,7 @@
 				A10002023 /* SkillUsageStat.swift */,
 				A10002026 /* SkillSortOption.swift */,
 				A10002027 /* SkillCollection.swift */,
+				A10002029 /* Plugin.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -127,6 +136,7 @@
 				A10002008 /* SkillStore.swift */,
 				A10002020 /* AgentScanner.swift */,
 				A10002024 /* UsageTracker.swift */,
+				A10002030 /* PluginScanner.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -142,6 +152,8 @@
 				A10002021 /* AgentRowView.swift */,
 				A10002022 /* AgentDetailView.swift */,
 				A10002025 /* UsageStatsView.swift */,
+				A10002031 /* PluginRowView.swift */,
+				A10002032 /* PluginDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -249,6 +261,10 @@
 				A10001025 /* SkillSortOption.swift in Sources */,
 				A10001026 /* SkillCollection.swift in Sources */,
 				A10001027 /* SkillsBarLayout.swift in Sources */,
+				A10001028 /* Plugin.swift in Sources */,
+				A10001029 /* PluginScanner.swift in Sources */,
+				A10001030 /* PluginRowView.swift in Sources */,
+				A10001031 /* PluginDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -390,7 +406,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.3;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.amanhimself.skillsbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -417,7 +433,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.3;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.amanhimself.skillsbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

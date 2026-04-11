@@ -12,6 +12,8 @@ private let iso8601Plain: ISO8601DateFormatter = {
     return formatter
 }()
 
+private let usageCacheSchemaVersion = 2
+
 @MainActor
 final class UsageTracker: ObservableObject {
     @Published var stats: [String: SkillUsageStat] = [:]
@@ -121,6 +123,7 @@ final class UsageTracker: ObservableObject {
 
     nonisolated private func performIncrementalParse() async -> UsageCache {
         var cache = await loadCache()
+        cache.schemaVersion = usageCacheSchemaVersion
         let fileManager = FileManager.default
         let home = fileManager.homeDirectoryForCurrentUser.path
 
@@ -345,7 +348,8 @@ final class UsageTracker: ObservableObject {
     }
 
     nonisolated private static func isSkillNameCharacter(_ character: Character) -> Bool {
-        character.isLetter || character.isNumber || character == "-" || character == "_" || character == "."
+        // Codex plugin skills use identifiers like "plugin-name:skill-name".
+        character.isLetter || character.isNumber || character == "-" || character == "_" || character == "." || character == ":"
     }
 
     // MARK: - Build Stats
@@ -448,7 +452,11 @@ final class UsageTracker: ObservableObject {
             if let date = iso8601Plain.date(from: string) { return date }
             return Date.distantPast
         }
-        return (try? decoder.decode(UsageCache.self, from: data)) ?? UsageCache()
+        guard let cache = try? decoder.decode(UsageCache.self, from: data),
+              cache.schemaVersion == usageCacheSchemaVersion else {
+            return UsageCache(schemaVersion: usageCacheSchemaVersion)
+        }
+        return cache
     }
 
     nonisolated private func saveCache(_ cache: UsageCache) async {

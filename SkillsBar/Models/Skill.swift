@@ -76,6 +76,18 @@ struct Skill: Identifiable, Hashable {
             let folderName = URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent
             return folderName
 
+        case .codexCLI(.plugin):
+            let components = path.components(separatedBy: "/")
+            if let skillsIdx = components.lastIndex(of: "skills"),
+               skillsIdx > 1,
+               skillsIdx + 1 < components.count {
+                let pluginName = components[skillsIdx - 2]
+                let skillName = components[skillsIdx + 1]
+                return "\(pluginName):\(skillName)"
+            }
+            let folderName = URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent
+            return folderName
+
         case .codexCLI(.user):
             let folderName = URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent
             return folderName
@@ -90,6 +102,8 @@ struct Skill: Identifiable, Hashable {
             return "Use the Skill tool or type /skill-name in Claude Code"
         case .codexCLI(.builtin):
             return "Available by default in Codex CLI"
+        case .codexCLI(.plugin):
+            return "Available through an installed Codex plugin"
         case .codexCLI(.user):
             return "Available as an installed skill in Codex CLI"
         }

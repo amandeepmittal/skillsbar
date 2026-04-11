@@ -5,6 +5,7 @@ import SwiftUI
 final class SkillStore: ObservableObject {
     @Published var groups: [SkillGroup] = []
     @Published var agentGroups: [AgentGroup] = []
+    @Published var plugins: [Plugin] = []
     @Published var collections: [SkillCollection] = []
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
@@ -254,7 +255,31 @@ final class SkillStore: ObservableObject {
     }
 
     var totalItemCount: Int {
-        totalSkillCount + agentGroups.reduce(0) { $0 + $1.totalCount }
+        totalSkillCount + plugins.count + agentGroups.reduce(0) { $0 + $1.totalCount }
+    }
+
+    var filteredPlugins: [Plugin] {
+        guard !searchText.isEmpty else { return plugins }
+        let query = searchText.lowercased()
+
+        return plugins.filter { plugin in
+            plugin.displayName.lowercased().contains(query) ||
+            plugin.name.lowercased().contains(query) ||
+            plugin.description.lowercased().contains(query) ||
+            plugin.shortDescription.lowercased().contains(query) ||
+            (plugin.publisher?.lowercased().contains(query) ?? false) ||
+            (plugin.version?.lowercased().contains(query) ?? false) ||
+            plugin.keywords.contains(where: { $0.lowercased().contains(query) })
+        }
+    }
+
+    func skills(for plugin: Plugin) -> [Skill] {
+        let pluginPath = standardizedPath(plugin.path)
+        let matchedSkills = lastScannedSkills.filter { skill in
+            guard case .codexCLI(.plugin) = skill.source else { return false }
+            return path(standardizedPath(skill.path), isEqualToOrInside: pluginPath)
+        }
+        return sortSkills(matchedSkills)
     }
 
     func groupsForTab(_ tab: SkillTab) -> [SkillGroup] {
@@ -355,7 +380,8 @@ final class SkillStore: ObservableObject {
             let agentCount = agentGroups.reduce(0) { $0 + $1.totalCount }
             return skillCount + agentCount
         case .codex:
-            return allGroups.filter { $0.id == "codex-cli" }.reduce(0) { $0 + $1.totalCount }
+            let skillCount = allGroups.filter { $0.id == "codex-cli" }.reduce(0) { $0 + $1.totalCount }
+            return skillCount + plugins.count
         case .collections:
             return collections.count
         }
@@ -382,7 +408,7 @@ final class SkillStore: ObservableObject {
 
         Task(priority: .userInitiated) { [weak self] in
             let scanned = await Task.detached(priority: .userInitiated) {
-                Self.scanSkillsAndAgents()
+                Self.scanContent()
             }.value
 
             guard let self else { return }
@@ -392,6 +418,7 @@ final class SkillStore: ObservableObject {
             self.lastScannedAgents = scanned.agents
             self.groups = self.buildGroups(from: scanned.skills)
             self.agentGroups = self.buildAgentGroups(from: scanned.agents)
+            self.plugins = scanned.plugins
         }
     }
 
@@ -455,6 +482,23 @@ final class SkillStore: ObservableObject {
         NSWorkspace.shared.selectFile(agent.path, inFileViewerRootedAtPath: "")
     }
 
+    static func openPluginInVSCode(_ plugin: Plugin) {
+        let url = URL(fileURLWithPath: plugin.path)
+        NSWorkspace.shared.open(
+            [url],
+            withApplicationAt: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"),
+            configuration: NSWorkspace.OpenConfiguration()
+        )
+    }
+
+    static func openPluginInDefaultEditor(_ plugin: Plugin) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: plugin.path))
+    }
+
+    static func revealPluginInFinder(_ plugin: Plugin) {
+        NSWorkspace.shared.selectFile(plugin.path, inFileViewerRootedAtPath: "")
+    }
+
     // MARK: - Watching
 
     private func startWatching() {
@@ -470,6 +514,7 @@ final class SkillStore: ObservableObject {
             (home as NSString).appendingPathComponent(".claude/plugins/cache"),
             (home as NSString).appendingPathComponent(".claude/agents"),
             (home as NSString).appendingPathComponent(".codex/skills"),
+            (home as NSString).appendingPathComponent(".codex/plugins/cache"),
         ].map { standardizedPath($0) }
 
         watchedRefreshPrefixes = targetPaths
@@ -543,10 +588,11 @@ final class SkillStore: ObservableObject {
         return deduped
     }
 
-    nonisolated private static func scanSkillsAndAgents() -> (skills: [Skill], agents: [Agent]) {
+    nonisolated private static func scanContent() -> (skills: [Skill], agents: [Agent], plugins: [Plugin]) {
         let skills = SkillScanner().scanAll()
         let agents = AgentScanner().scanAll()
-        return (skills, agents)
+        let plugins = PluginScanner().scanInstalledPlugins()
+        return (skills, agents, plugins)
     }
 
     // MARK: - Grouping (Skills)
@@ -582,6 +628,7 @@ final class SkillStore: ObservableObject {
         var claudeUserSkills: [Skill] = []
         var claudePluginSkills: [Skill] = []
         var codexBuiltinSkills: [Skill] = []
+        var codexPluginSkills: [Skill] = []
         var codexUserSkills: [Skill] = []
 
         for skill in skills {
@@ -589,6 +636,7 @@ final class SkillStore: ObservableObject {
             case .claudeCode(.user): claudeUserSkills.append(skill)
             case .claudeCode(.plugin): claudePluginSkills.append(skill)
             case .codexCLI(.builtin): codexBuiltinSkills.append(skill)
+            case .codexCLI(.plugin): codexPluginSkills.append(skill)
             case .codexCLI(.user): codexUserSkills.append(skill)
             }
         }
@@ -606,6 +654,7 @@ final class SkillStore: ObservableObject {
 
         let codexSections = [
             codexUserSkills.isEmpty ? nil : SkillSection(id: "codex-user", title: "User Skills", skills: sortSkills(codexUserSkills)),
+            codexPluginSkills.isEmpty ? nil : SkillSection(id: "codex-plugin", title: "Plugin Skills", skills: sortSkills(codexPluginSkills)),
             codexBuiltinSkills.isEmpty ? nil : SkillSection(id: "codex-builtin", title: "Built-in Skills", skills: sortSkills(codexBuiltinSkills)),
         ].compactMap { $0 }
 

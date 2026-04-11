@@ -76,7 +76,7 @@ struct UsageStatsView: View {
                 .foregroundStyle(.secondary)
             Text("No Usage Data")
                 .font(.system(size: 16, weight: .semibold))
-            Text("Claude Code session transcripts and explicit Codex skill triggers will appear here once you start using skills.")
+            Text("Claude Code session transcripts and explicit Codex skill triggers, including plugin skills, will appear here once you start using skills.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

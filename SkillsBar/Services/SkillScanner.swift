@@ -8,6 +8,7 @@ struct SkillScanner {
         var skills: [Skill] = []
         skills.append(contentsOf: scanClaudeCodeUserSkills())
         skills.append(contentsOf: scanClaudeCodePluginSkills())
+        skills.append(contentsOf: scanCodexPluginSkills())
         skills.append(contentsOf: scanCodexBuiltInSkills())
         skills.append(contentsOf: scanCodexUserSkills())
         return skills
@@ -46,6 +47,41 @@ struct SkillScanner {
     func scanCodexBuiltInSkills() -> [Skill] {
         let dir = (home as NSString).appendingPathComponent(".codex/skills/.system")
         return scanDirectChildren(dir: dir, source: .codexCLI(.builtin), checkAgentYaml: true)
+    }
+
+    /// Recursively scans ~/.codex/plugins/cache/ for files matching */skills/*/SKILL.md
+    func scanCodexPluginSkills() -> [Skill] {
+        let dir = (home as NSString).appendingPathComponent(".codex/plugins/cache")
+        guard fileManager.fileExists(atPath: dir) else { return [] }
+        guard let enumerator = fileManager.enumerator(atPath: dir) else { return [] }
+
+        var skillsByIdentifier: [String: Skill] = [:]
+
+        while let relativePath = enumerator.nextObject() as? String {
+            guard (relativePath as NSString).lastPathComponent == "SKILL.md" else { continue }
+
+            let parentDir = (relativePath as NSString).deletingLastPathComponent
+            let skillsDir = (parentDir as NSString).deletingLastPathComponent
+            guard (skillsDir as NSString).lastPathComponent == "skills" else { continue }
+
+            let fullPath = (dir as NSString).appendingPathComponent(relativePath)
+            let fullParentDir = (dir as NSString).appendingPathComponent(parentDir)
+
+            if let skill = parseSkillMD(at: fullPath, source: .codexCLI(.plugin), checkAgentYaml: true, parentDir: fullParentDir) {
+                let key = skill.triggerCommand.lowercased()
+                if let existing = skillsByIdentifier[key] {
+                    let newDate = skill.lastModified ?? .distantPast
+                    let existingDate = existing.lastModified ?? .distantPast
+                    if newDate >= existingDate {
+                        skillsByIdentifier[key] = skill
+                    }
+                } else {
+                    skillsByIdentifier[key] = skill
+                }
+            }
+        }
+
+        return Array(skillsByIdentifier.values)
     }
 
     /// Scans ~/.codex/skills/ for user-installed skills (excluding .system)

@@ -11,6 +11,7 @@ enum SkillSource: Hashable {
 
     enum CodexSection: String, Hashable {
         case builtin = "Built-in Skills"
+        case plugin = "Plugin Skills"
         case user = "User Skills"
     }
 
@@ -42,6 +43,7 @@ enum SkillSource: Hashable {
         case .claudeCode(.user): return "orange"
         case .claudeCode(.plugin): return "orange"
         case .codexCLI(.builtin): return "purple"
+        case .codexCLI(.plugin): return "purple"
         case .codexCLI(.user): return "purple"
         }
     }

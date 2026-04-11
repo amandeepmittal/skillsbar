@@ -124,6 +124,7 @@ struct ParsedSessionFile: Codable {
 }
 
 struct UsageCache: Codable {
+    var schemaVersion: Int = 1
     var parsedFiles: [String: ParsedSessionFile] = [:]
     var lastFullScanDate: Date?
 }
