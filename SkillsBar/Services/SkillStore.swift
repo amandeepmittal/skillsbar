@@ -501,6 +501,38 @@ final class SkillStore: ObservableObject {
         NSWorkspace.shared.selectFile(plugin.path, inFileViewerRootedAtPath: "")
     }
 
+    // MARK: - Global Instructions Files
+
+    enum GlobalInstructionsFile: String, CaseIterable, Identifiable {
+        case claudeCode
+        case codex
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .claudeCode: return "Global CLAUDE.md"
+            case .codex:      return "Global AGENTS.md"
+            }
+        }
+
+        var path: String {
+            switch self {
+            case .claudeCode: return ("~/.claude/CLAUDE.md" as NSString).expandingTildeInPath
+            case .codex:      return ("~/.codex/AGENTS.md"  as NSString).expandingTildeInPath
+            }
+        }
+    }
+
+    static func openInstructionsFileInVSCode(_ file: GlobalInstructionsFile) {
+        let url = URL(fileURLWithPath: file.path)
+        NSWorkspace.shared.open(
+            [url],
+            withApplicationAt: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"),
+            configuration: NSWorkspace.OpenConfiguration()
+        )
+    }
+
     // MARK: - Watching
 
     private func startWatching() {

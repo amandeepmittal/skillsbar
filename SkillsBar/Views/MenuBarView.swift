@@ -19,6 +19,7 @@ struct MenuBarView: View {
     @State private var showSettings = false
     @State private var showAbout = false
     @State private var showUsageStats = false
+    @State private var showInstructionsPopover = false
     @State private var collapsedSections: Set<String> = {
         let defaults = UserDefaults.standard
         let saved = Set(defaults.stringArray(forKey: "collapsedSections") ?? [])
@@ -294,6 +295,34 @@ struct MenuBarView: View {
                 footerStatusView
 
                 Spacer()
+
+                Button(action: { showInstructionsPopover.toggle() }) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Open global AI instructions in VS Code")
+                .popover(isPresented: $showInstructionsPopover, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(SkillStore.GlobalInstructionsFile.allCases) { file in
+                            Button(action: {
+                                showInstructionsPopover = false
+                                SkillStore.openInstructionsFileInVSCode(file)
+                            }) {
+                                Text("Open \(file.displayName)")
+                                    .font(.system(size: 13))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .frame(minWidth: 200)
+                }
 
                 Button(action: { showSettings = true }) {
                     Image(systemName: "gearshape")
