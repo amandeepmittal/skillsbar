@@ -8,6 +8,7 @@ final class SkillStore: ObservableObject {
     @Published var plugins: [Plugin] = []
     @Published var collections: [SkillCollection] = []
     @Published var lastRefreshDate: Date?
+    @Published var isRefreshing = false
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
     @Published var pinnedOrder: [String] = []
@@ -406,6 +407,7 @@ final class SkillStore: ObservableObject {
     func refresh() {
         refreshGeneration += 1
         let generation = refreshGeneration
+        isRefreshing = true
 
         Task(priority: .userInitiated) { [weak self] in
             let scanned = await Task.detached(priority: .userInitiated) {
@@ -421,6 +423,7 @@ final class SkillStore: ObservableObject {
             self.agentGroups = self.buildAgentGroups(from: scanned.agents)
             self.plugins = scanned.plugins
             self.lastRefreshDate = Date()
+            self.isRefreshing = false
         }
     }
 

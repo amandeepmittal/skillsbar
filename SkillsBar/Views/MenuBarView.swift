@@ -43,6 +43,7 @@ struct MenuBarView: View {
     @State private var editingCollectionName = ""
     @State private var copyToastMessage: String?
     @State private var copyToastDismissWorkItem: DispatchWorkItem?
+    @FocusState private var isSearchFieldFocused: Bool
 
     private enum ListItem {
         case skill(Skill)
@@ -185,6 +186,7 @@ struct MenuBarView: View {
         .onAppear {
             highlightedItemId = nil
             installKeyboardMonitor()
+            focusSearchIfNeeded()
         }
         .onDisappear {
             removeKeyboardMonitor()
@@ -198,8 +200,12 @@ struct MenuBarView: View {
                 editingCollectionID = nil
                 editingCollectionName = ""
             }
+            focusSearchIfNeeded()
         }
         .onChange(of: store.searchText) { _, _ in highlightedItemId = nil }
+        .onReceive(NotificationCenter.default.publisher(for: .skillsBarPopoverDidOpen)) { _ in
+            focusSearchIfNeeded()
+        }
     }
 
     private var mainListView: some View {
@@ -239,6 +245,7 @@ struct MenuBarView: View {
                 TextField(searchPlaceholder, text: $store.searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
+                    .focused($isSearchFieldFocused)
                     .onExitCommand {
                         _ = clearSearch()
                     }
@@ -261,20 +268,25 @@ struct MenuBarView: View {
 
             // Footer card
             HStack {
-                Button(action: {
-                    store.refresh()
-                    usageTracker.refresh()
-                }) {
+                Button(action: refreshAll) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 12))
+                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                            .animation(
+                                isRefreshing
+                                    ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                    : .default,
+                                value: isRefreshing
+                            )
                         Text("Refresh")
                             .font(.system(size: 12))
                     }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Refresh skills & stats")
+                .disabled(isRefreshing)
+                .help(isRefreshing ? "Refreshing skills & stats" : "Refresh skills & stats")
 
                 Spacer()
 
@@ -1352,9 +1364,23 @@ struct MenuBarView: View {
             .max()
     }
 
+    private var isRefreshing: Bool {
+        store.isRefreshing || usageTracker.isLoading
+    }
+
     @ViewBuilder
     private var footerStatusView: some View {
-        if let footerLastRefreshDate {
+        if isRefreshing {
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.5)
+                    .frame(width: 10, height: 10)
+                Text("Refreshing")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        } else if let footerLastRefreshDate {
             TimelineView(.periodic(from: footerLastRefreshDate, by: 60)) { context in
                 Text(refreshStatusText(since: footerLastRefreshDate, now: context.date))
                     .font(.system(size: 11))
@@ -1380,6 +1406,15 @@ struct MenuBarView: View {
     }
 
     // MARK: - Keyboard Navigation
+
+    private var isShowingMainList: Bool {
+        selectedSkill == nil &&
+            selectedAgent == nil &&
+            selectedPlugin == nil &&
+            !showSettings &&
+            !showAbout &&
+            !showUsageStats
+    }
 
     private var flatVisibleItems: [ListItem] {
         var items: [ListItem] = []
@@ -1480,8 +1515,6 @@ struct MenuBarView: View {
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
-        let isOnMainList = selectedSkill == nil && selectedAgent == nil && selectedPlugin == nil && !showSettings && !showAbout && !showUsageStats
-
         switch Int(event.keyCode) {
         case 123: // Left arrow
             guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) else {
@@ -1489,15 +1522,15 @@ struct MenuBarView: View {
             }
             return handleBackNavigation() ? nil : event
         case 125: // Down arrow
-            guard isOnMainList else { return event }
+            guard isShowingMainList else { return event }
             moveHighlight(by: 1)
             return nil
         case 126: // Up arrow
-            guard isOnMainList else { return event }
+            guard isShowingMainList else { return event }
             moveHighlight(by: -1)
             return nil
         case 36: // Return
-            guard isOnMainList, highlightedItemId != nil else { return event }
+            guard isShowingMainList, highlightedItemId != nil else { return event }
             openHighlightedItem()
             return nil
         case 53: // Escape
@@ -1564,6 +1597,19 @@ struct MenuBarView: View {
             return true
         }
         return clearSearch()
+    }
+
+    private func refreshAll() {
+        guard !isRefreshing else { return }
+        store.refresh()
+        usageTracker.refresh()
+    }
+
+    private func focusSearchIfNeeded() {
+        guard isShowingMainList else { return }
+        DispatchQueue.main.async {
+            isSearchFieldFocused = true
+        }
     }
 
     private func copyToPasteboard(_ value: String, feedback: String) {

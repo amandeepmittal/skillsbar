@@ -2,6 +2,10 @@ import SwiftUI
 import AppKit
 import Carbon.HIToolbox
 
+extension Notification.Name {
+    static let skillsBarPopoverDidOpen = Notification.Name("SkillsBarPopoverDidOpen")
+}
+
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
@@ -62,6 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
+            NotificationCenter.default.post(name: .skillsBarPopoverDidOpen, object: nil)
         }
     }
 
