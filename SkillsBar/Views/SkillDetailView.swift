@@ -309,7 +309,7 @@ struct SkillDetailView: View {
                         } else {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], alignment: .leading, spacing: 8) {
                                 ForEach(skillCollections) { collection in
-                                    collectionBadge(collection.name)
+                                    collectionBadge(collection)
                                 }
                             }
                         }
@@ -435,16 +435,20 @@ struct SkillDetailView: View {
             .clipShape(Capsule())
     }
 
-    private func collectionBadge(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .lineLimit(1)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.blue.opacity(0.12))
-            .foregroundStyle(.blue)
-            .clipShape(Capsule())
+    private func collectionBadge(_ collection: SkillCollection) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: collection.iconName)
+                .font(.system(size: 10, weight: .semibold))
+            Text(collection.name)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(collection.accent.swiftUIColor.opacity(0.12))
+        .foregroundStyle(collection.accent.swiftUIColor)
+        .clipShape(Capsule())
     }
 
     private func copyPath() {

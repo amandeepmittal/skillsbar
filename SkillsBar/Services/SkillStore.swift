@@ -70,6 +70,17 @@ final class SkillStore: ObservableObject {
         UserDefaults.standard.set(encoded, forKey: Self.collectionsKey)
     }
 
+    var orderedCollections: [SkillCollection] {
+        collections.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.isPinned != rhs.element.isPinned {
+                    return lhs.element.isPinned && !rhs.element.isPinned
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     func movePinnedItem(from sourcePath: String, toIndex destinationIndex: Int) {
         guard let sourceIndex = pinnedOrder.firstIndex(of: sourcePath) else { return }
         pinnedOrder.remove(at: sourceIndex)
@@ -102,6 +113,96 @@ final class SkillStore: ObservableObject {
         persistCollections()
     }
 
+    func duplicateCollection(_ collection: SkillCollection) {
+        let copiedCollection = SkillCollection(
+            name: uniqueCollectionName(from: "\(collection.name) Copy"),
+            skillPaths: collection.skillPaths,
+            iconName: collection.iconName,
+            accent: collection.accent
+        )
+        collections.append(copiedCollection)
+        persistCollections()
+    }
+
+    func canMoveCollection(_ collection: SkillCollection, by offset: Int) -> Bool {
+        guard let sourceIndex = collections.firstIndex(where: { $0.id == collection.id }) else { return false }
+        let peerIndices = collections.indices.filter { collections[$0].isPinned == collection.isPinned }
+        guard let peerPosition = peerIndices.firstIndex(of: sourceIndex) else { return false }
+        return peerIndices.indices.contains(peerPosition + offset)
+    }
+
+    func moveCollection(_ collection: SkillCollection, by offset: Int) {
+        guard let sourceIndex = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+        let peerIndices = collections.indices.filter { collections[$0].isPinned == collection.isPinned }
+        guard let peerPosition = peerIndices.firstIndex(of: sourceIndex),
+              peerIndices.indices.contains(peerPosition + offset) else {
+            return
+        }
+
+        let destinationIndex = peerIndices[peerPosition + offset]
+        collections.swapAt(sourceIndex, destinationIndex)
+        collections[destinationIndex].updatedAt = Date()
+        persistCollections()
+    }
+
+    func togglePinCollection(_ collection: SkillCollection) {
+        guard let index = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+        collections[index].isPinned.toggle()
+        collections[index].updatedAt = Date()
+        persistCollections()
+    }
+
+    func updateCollectionAppearance(
+        _ collection: SkillCollection,
+        iconName: String? = nil,
+        accent: SkillCollectionAccent? = nil
+    ) {
+        guard let index = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+        if let iconName {
+            collections[index].iconName = iconName
+        }
+        if let accent {
+            collections[index].accent = accent
+        }
+        collections[index].updatedAt = Date()
+        persistCollections()
+    }
+
+    func moveSkill(_ skill: Skill, in collection: SkillCollection, before targetSkill: Skill) {
+        moveSkill(skill, in: collection, relativeTo: targetSkill, shouldInsertAfterTarget: false)
+    }
+
+    func moveSkill(_ skill: Skill, in collection: SkillCollection, after targetSkill: Skill) {
+        moveSkill(skill, in: collection, relativeTo: targetSkill, shouldInsertAfterTarget: true)
+    }
+
+    func removeSkill(_ skill: Skill, from collection: SkillCollection) {
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+        collections[collectionIndex].skillPaths.removeAll { $0 == skill.path }
+        collections[collectionIndex].updatedAt = Date()
+        persistCollections()
+    }
+
+    @discardableResult
+    func clearMissingSkills(from collection: SkillCollection) -> Int {
+        guard lastRefreshDate != nil,
+              let collectionIndex = collections.firstIndex(where: { $0.id == collection.id }) else {
+            return 0
+        }
+
+        let availablePaths = Set(lastScannedSkills.map(\.path))
+        let originalPaths = collections[collectionIndex].skillPaths
+        let resolvedPaths = originalPaths.filter { availablePaths.contains($0) }
+        let removedCount = originalPaths.count - resolvedPaths.count
+
+        guard removedCount > 0 else { return 0 }
+
+        collections[collectionIndex].skillPaths = resolvedPaths
+        collections[collectionIndex].updatedAt = Date()
+        persistCollections()
+        return removedCount
+    }
+
     func toggleSkill(_ skill: Skill, in collection: SkillCollection) {
         guard let index = collections.firstIndex(where: { $0.id == collection.id }) else { return }
 
@@ -120,7 +221,7 @@ final class SkillStore: ObservableObject {
     }
 
     func collections(for skill: Skill) -> [SkillCollection] {
-        collections.filter { $0.skillPaths.contains(skill.path) }
+        orderedCollections.filter { $0.skillPaths.contains(skill.path) }
     }
 
     func skill(forPath path: String) -> Skill? {
@@ -131,9 +232,10 @@ final class SkillStore: ObservableObject {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let skillLookup = Dictionary(uniqueKeysWithValues: lastScannedSkills.map { ($0.path, $0) })
 
-        return collections.compactMap { collection in
+        return orderedCollections.compactMap { collection in
             let resolvedSkills = collection.skillPaths.compactMap { skillLookup[$0] }
-            let missingCount = max(0, collection.skillPaths.count - resolvedSkills.count)
+            let missingSkillPaths = collection.skillPaths.filter { skillLookup[$0] == nil }
+            let missingCount = missingSkillPaths.count
 
             let visibleSkills: [Skill]
             if trimmedQuery.isEmpty {
@@ -156,7 +258,8 @@ final class SkillStore: ObservableObject {
             return ResolvedSkillCollection(
                 collection: collection,
                 skills: visibleSkills,
-                missingCount: missingCount
+                missingCount: missingCount,
+                missingSkillPaths: missingSkillPaths
             )
         }
     }
@@ -198,6 +301,33 @@ final class SkillStore: ObservableObject {
         if didChange {
             persistCollections()
         }
+    }
+
+    private func moveSkill(
+        _ skill: Skill,
+        in collection: SkillCollection,
+        relativeTo targetSkill: Skill,
+        shouldInsertAfterTarget: Bool
+    ) {
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collection.id }) else { return }
+        var paths = collections[collectionIndex].skillPaths
+
+        guard let sourceIndex = paths.firstIndex(of: skill.path),
+              paths.contains(targetSkill.path),
+              skill.path != targetSkill.path else {
+            return
+        }
+
+        let path = paths.remove(at: sourceIndex)
+        guard var targetIndex = paths.firstIndex(of: targetSkill.path) else { return }
+        if shouldInsertAfterTarget {
+            targetIndex += 1
+        }
+
+        paths.insert(path, at: targetIndex)
+        collections[collectionIndex].skillPaths = paths
+        collections[collectionIndex].updatedAt = Date()
+        persistCollections()
     }
 
     // MARK: - Pinning (Skills)

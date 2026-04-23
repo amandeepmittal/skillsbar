@@ -147,7 +147,7 @@ struct MenuBarView: View {
                     skill: skill,
                     isPinned: store.isPinned(skill),
                     usageStat: usageTracker.stat(for: skill),
-                    collections: store.collections,
+                    collections: store.orderedCollections,
                     skillCollections: store.collections(for: skill),
                     onBack: { selectedSkill = nil },
                     onDelete: { skill in
@@ -630,7 +630,7 @@ struct MenuBarView: View {
                 Divider()
             } else {
                 Menu("Collections") {
-                    ForEach(store.collections) { collection in
+                    ForEach(store.orderedCollections) { collection in
                         Button(
                             store.isSkill(skill, in: collection)
                                 ? "Remove from \(collection.name)"
@@ -790,7 +790,7 @@ struct MenuBarView: View {
                             newCollectionName = "New Collection"
                         }
                     } label: {
-                        Label("New Collection", systemImage: "plus")
+                        Label("New", systemImage: "plus")
                             .font(.system(size: 12, weight: .medium))
                     }
                     .buttonStyle(.plain)
@@ -845,12 +845,15 @@ struct MenuBarView: View {
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(.tertiary)
                             .rotationEffect(.degrees(collapsed ? 0 : 90))
+                        Image(systemName: collection.iconName)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(collection.accent.swiftUIColor)
                         TextField("Collection name", text: $editingCollectionName)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { commitRenameCollection(collection) }
                         countBadge("\(resolvedCollection.skills.count)")
                         if resolvedCollection.missingCount > 0 {
-                            countBadge("\(resolvedCollection.missingCount) missing", secondary: true)
+                            missingCountBadge(resolvedCollection)
                         }
                         Spacer()
                     }
@@ -861,19 +864,28 @@ struct MenuBarView: View {
                                 .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(.tertiary)
                                 .rotationEffect(.degrees(collapsed ? 0 : 90))
+                            Image(systemName: collection.iconName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(collection.accent.swiftUIColor)
+                            if collection.isPinned {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.yellow)
+                            }
                             Text(collection.name.uppercased())
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(.secondary)
                                 .tracking(0.5)
                             countBadge("\(resolvedCollection.skills.count)")
-                            if resolvedCollection.missingCount > 0 {
-                                countBadge("\(resolvedCollection.missingCount) missing", secondary: true)
-                            }
-                            Spacer()
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+
+                    if resolvedCollection.missingCount > 0 {
+                        missingCountBadge(resolvedCollection)
+                    }
                 }
 
                 if isEditing {
@@ -891,6 +903,58 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
                 } else {
                     Menu {
+                        Button(collection.isPinned ? "Unpin Collection" : "Pin to Top") {
+                            store.togglePinCollection(collection)
+                        }
+                        Button("Duplicate") {
+                            store.duplicateCollection(collection)
+                            showCopyToast("Duplicated collection")
+                        }
+                        if resolvedCollection.missingCount > 0 {
+                            Button("Refresh Skills") {
+                                refreshAll()
+                            }
+                            .disabled(isRefreshing)
+                            Button("Clear Missing Skills", role: .destructive) {
+                                clearMissingSkills(in: resolvedCollection)
+                            }
+                        }
+                        if store.canMoveCollection(collection, by: -1) {
+                            Button("Move Up") {
+                                store.moveCollection(collection, by: -1)
+                            }
+                        }
+                        if store.canMoveCollection(collection, by: 1) {
+                            Button("Move Down") {
+                                store.moveCollection(collection, by: 1)
+                            }
+                        }
+                        Divider()
+                        Menu("Color") {
+                            ForEach(SkillCollectionAccent.allCases) { accent in
+                                Button {
+                                    store.updateCollectionAppearance(collection, accent: accent)
+                                } label: {
+                                    Label(
+                                        accent.title,
+                                        systemImage: collection.accent == accent ? "checkmark.circle.fill" : "circle.fill"
+                                    )
+                                }
+                            }
+                        }
+                        Menu("Icon") {
+                            ForEach(SkillCollectionIcon.allCases) { icon in
+                                Button {
+                                    store.updateCollectionAppearance(collection, iconName: icon.rawValue)
+                                } label: {
+                                    Label(
+                                        icon.title,
+                                        systemImage: collection.iconName == icon.rawValue ? "checkmark.circle.fill" : icon.rawValue
+                                    )
+                                }
+                            }
+                        }
+                        Divider()
                         Button("Rename") {
                             editingCollectionID = collection.id
                             editingCollectionName = collection.name
@@ -931,13 +995,66 @@ struct MenuBarView: View {
                             Divider()
                                 .padding(.leading, 44)
                         }
-                        skillRow(skill: skill, index: index, isPinned: false)
+                        collectionSkillRow(
+                            skill: skill,
+                            index: index,
+                            collection: collection,
+                            visibleSkills: resolvedCollection.skills
+                        )
                     }
                 }
             }
         }
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private func collectionSkillRow(
+        skill: Skill,
+        index: Int,
+        collection: SkillCollection,
+        visibleSkills: [Skill]
+    ) -> some View {
+        Button(action: { selectedSkill = skill }) {
+            SkillRowView(
+                skill: skill,
+                isPinned: store.isPinned(skill),
+                usageCount: usageTracker.stat(for: skill)?.totalCount,
+                showSourceBadge: true
+            )
+        }
+        .buttonStyle(.plain)
+        .background(highlightedItemId == skill.id ? Color.accentColor.opacity(0.12) : Color.clear)
+        .onHover { hovering in
+            if hovering { highlightedItemId = nil }
+        }
+        .id(skill.id)
+        .contextMenu {
+            Button("Open Detail") {
+                selectedSkill = skill
+            }
+            Divider()
+            if index > 0 {
+                Button("Move Up") {
+                    store.moveSkill(skill, in: collection, before: visibleSkills[index - 1])
+                }
+            }
+            if index < visibleSkills.count - 1 {
+                Button("Move Down") {
+                    store.moveSkill(skill, in: collection, after: visibleSkills[index + 1])
+                }
+            }
+            Button("Remove from Collection") {
+                store.removeSkill(skill, from: collection)
+            }
+            Divider()
+            Button("Copy Command") {
+                copyToPasteboard(skill.triggerCommand, feedback: "Copied command")
+            }
+            Button("Copy Path") {
+                copyToPasteboard(skill.path, feedback: "Copied path")
+            }
+        }
     }
 
     private var collectionsEmptyStateView: some View {
@@ -1025,6 +1142,48 @@ struct MenuBarView: View {
             .padding(.vertical, 1)
             .background(Color.secondary.opacity(secondary ? 0.08 : 0.12))
             .clipShape(Capsule())
+    }
+
+    private func missingCountBadge(_ resolvedCollection: ResolvedSkillCollection) -> some View {
+        Menu {
+            Button("Refresh Skills") {
+                refreshAll()
+            }
+            .disabled(isRefreshing)
+            Button("Clear Missing", role: .destructive) {
+                clearMissingSkills(in: resolvedCollection)
+            }
+        } label: {
+            countBadge("\(resolvedCollection.missingCount) missing", secondary: true)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+            .help(missingCollectionHelp(for: resolvedCollection.missingSkillPaths))
+    }
+
+    private func missingCollectionHelp(for paths: [String]) -> String {
+        guard !paths.isEmpty else { return "No missing saved skills." }
+
+        let displayedPaths = paths.prefix(8).map { path in
+            "\(missingSkillName(from: path)): \(path)"
+        }
+
+        var lines = ["Missing saved skills:"] + displayedPaths
+
+        if paths.count > displayedPaths.count {
+            lines.append("and \(paths.count - displayedPaths.count) more")
+        }
+
+        lines.append("Click to refresh or clear stale entries.")
+        return lines.joined(separator: "\n")
+    }
+
+    private func missingSkillName(from path: String) -> String {
+        let url = URL(fileURLWithPath: path)
+        if url.lastPathComponent == "SKILL.md" {
+            return url.deletingLastPathComponent().lastPathComponent
+        }
+        return url.lastPathComponent
     }
 
     // MARK: - Agent Section Card
@@ -1603,6 +1762,18 @@ struct MenuBarView: View {
         guard !isRefreshing else { return }
         store.refresh()
         usageTracker.refresh()
+    }
+
+    private func clearMissingSkills(in resolvedCollection: ResolvedSkillCollection) {
+        let removedCount = store.clearMissingSkills(from: resolvedCollection.collection)
+
+        if removedCount == 1 {
+            showCopyToast("Cleared 1 missing skill")
+        } else if removedCount > 1 {
+            showCopyToast("Cleared \(removedCount) missing skills")
+        } else {
+            showCopyToast("Nothing to clear")
+        }
     }
 
     private func focusSearchIfNeeded() {
