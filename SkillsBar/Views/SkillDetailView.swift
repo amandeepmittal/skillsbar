@@ -57,6 +57,12 @@ struct SkillDetailView: View {
                         action: { SkillStore.openInDefaultEditor(skill) }
                     )
                     actionButton(
+                        icon: "folder",
+                        label: "Finder",
+                        color: .secondary,
+                        action: revealInFinder
+                    )
+                    actionButton(
                         icon: "doc.on.doc",
                         label: "Copy",
                         color: .secondary,
