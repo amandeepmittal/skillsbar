@@ -47,20 +47,6 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(spacing: 14) {
-                    infoSection(icon: "sparkles", title: "Discover") {
-                        Toggle(isOn: $showsWhatsNewSection) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Show What's New")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(.primary)
-                                Text("Highlight skills and plugins changed in the last 7 days.")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .toggleStyle(.switch)
-                    }
-
                     infoSection(icon: "circle.lefthalf.filled", title: "Appearance") {
                         VStack(alignment: .leading, spacing: 10) {
                             Picker("", selection: $preferredAppearanceRaw) {
@@ -77,27 +63,25 @@ struct SettingsView: View {
                         }
                     }
 
-                    infoSection(icon: "arrow.up.arrow.down", title: "Default Sort") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Picker("", selection: $skillStore.sortOption) {
-                                ForEach(SkillSortOption.allCases, id: \.self) { option in
-                                    Text(option.rawValue).tag(option)
-                                }
+                    infoSection(icon: "sparkles", title: "Discover") {
+                        Toggle(isOn: $showsWhatsNewSection) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Show What's New")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.primary)
+                                Text("Highlight skills and plugins changed in the last 7 days.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
                             }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-
-                            Text("Applies to the main skill lists across Claude Code and Codex.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
                         }
+                        .toggleStyle(.switch)
                     }
 
-                    infoSection(icon: "bolt", title: "Behavior") {
+                    infoSection(icon: "bolt", title: "Start at Login") {
                         VStack(alignment: .leading, spacing: 10) {
                             Toggle(isOn: startAtLoginBinding) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Start at Login")
+                                    Text("Open Automatically")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(.primary)
                                     Text("Open SkillsBar automatically when you sign in.")
@@ -127,6 +111,22 @@ struct SettingsView: View {
                                     .foregroundStyle(.red)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
+                        }
+                    }
+
+                    infoSection(icon: "arrow.up.arrow.down", title: "Default Sort") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Picker("", selection: $skillStore.sortOption) {
+                                ForEach(SkillSortOption.allCases, id: \.self) { option in
+                                    Text(option.rawValue).tag(option)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+
+                            Text("Applies to the main skill lists across Claude Code and Codex.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
