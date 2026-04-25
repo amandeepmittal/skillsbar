@@ -312,7 +312,9 @@ struct AgentDetailView: View {
         Button(action: action) {
             VStack(spacing: 2) {
                 Image(systemName: icon)
-                    .font(.system(size: 13))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
                 Text(label)
                     .font(.system(size: 9, weight: .medium))
             }
