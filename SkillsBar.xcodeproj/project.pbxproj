@@ -40,6 +40,7 @@
 		A10001031 /* PluginDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002032; };
 		A10001032 /* AppAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002033; };
 		A10001033 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002034; };
+		A10001034 /* LoginItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002035; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +79,7 @@
 		A10002032 /* PluginDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDetailView.swift; sourceTree = "<group>"; };
 		A10002033 /* AppAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAppearance.swift; sourceTree = "<group>"; };
 		A10002034 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A10002035 /* LoginItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +144,7 @@
 				A10002020 /* AgentScanner.swift */,
 				A10002024 /* UsageTracker.swift */,
 				A10002030 /* PluginScanner.swift */,
+				A10002035 /* LoginItemController.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -273,6 +276,7 @@
 				A10001031 /* PluginDetailView.swift in Sources */,
 				A10001032 /* AppAppearance.swift in Sources */,
 				A10001033 /* SettingsView.swift in Sources */,
+				A10001034 /* LoginItemController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -6,8 +6,15 @@ struct SettingsView: View {
 
     @AppStorage(AppPreferenceKey.showsWhatsNewSection) private var showsWhatsNewSection = true
     @AppStorage(AppPreferenceKey.preferredAppearance) private var preferredAppearanceRaw = AppAppearance.system.rawValue
+    @StateObject private var loginItemController = LoginItemController()
 
     private let sectionCornerRadius: CGFloat = 16
+    private var startAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { loginItemController.isEnabled },
+            set: { loginItemController.setEnabled($0) }
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,10 +94,40 @@ struct SettingsView: View {
                     }
 
                     infoSection(icon: "bolt", title: "Behavior") {
-                        Text("Changes apply instantly and are remembered across launches.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Toggle(isOn: startAtLoginBinding) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Start at Login")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(.primary)
+                                    Text("Open SkillsBar automatically when you sign in.")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(.switch)
+
+                            if loginItemController.requiresApproval {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Allow SkillsBar in System Settings to finish enabling Start at Login.")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Button("Open Login Items Settings") {
+                                        loginItemController.openLoginItemsSettings()
+                                    }
+                                    .font(.system(size: 12))
+                                }
+                            }
+
+                            if let errorMessage = loginItemController.errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -100,6 +137,9 @@ struct SettingsView: View {
             }
         }
         .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.aboutHeight)
+        .onAppear {
+            loginItemController.refresh()
+        }
     }
 
     private func infoSection<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
