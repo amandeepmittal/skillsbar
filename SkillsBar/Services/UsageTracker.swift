@@ -32,10 +32,13 @@ final class UsageTracker: ObservableObject {
 
     private var autoRefreshTimer: Timer?
     private var watcher: FSEventsWatcher?
+    private var watchedRefreshTask: Task<Void, Never>?
     private static let autoRefreshInterval: TimeInterval = 12 * 60 * 60
+    private static let watchedRefreshDelay: UInt64 = 5 * 1_000_000_000
 
     deinit {
         autoRefreshTimer?.invalidate()
+        watchedRefreshTask?.cancel()
         watcher?.stop()
     }
 
@@ -102,6 +105,15 @@ final class UsageTracker: ObservableObject {
         isLoading = true
 
         Task.detached(priority: .userInitiated) {
+            let cachedSnapshot = await self.loadCache()
+            let cachedStats = Self.buildStats(from: cachedSnapshot)
+            if !cachedStats.isEmpty {
+                await MainActor.run {
+                    self.stats = cachedStats
+                    self.lastRefreshDate = cachedSnapshot.lastFullScanDate
+                }
+            }
+
             let cache = await self.performIncrementalParse()
             let newStats = Self.buildStats(from: cache)
             await MainActor.run {
@@ -130,6 +142,8 @@ final class UsageTracker: ObservableObject {
     func stopAutoRefresh() {
         autoRefreshTimer?.invalidate()
         autoRefreshTimer = nil
+        watchedRefreshTask?.cancel()
+        watchedRefreshTask = nil
         watcher?.stop()
         watcher = nil
     }
@@ -148,10 +162,19 @@ final class UsageTracker: ObservableObject {
         watcher = FSEventsWatcher(paths: watchPaths) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
-                self.refresh()
+                self.scheduleWatchedRefresh()
             }
         }
         watcher?.start()
+    }
+
+    private func scheduleWatchedRefresh() {
+        watchedRefreshTask?.cancel()
+        watchedRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.watchedRefreshDelay)
+            guard !Task.isCancelled else { return }
+            self?.refresh()
+        }
     }
 
     // MARK: - Incremental Parse
@@ -235,7 +258,7 @@ final class UsageTracker: ObservableObject {
         }
 
         if let cached = cache.parsedFiles[path],
-           cached.lastModified == modifiedDate,
+           Self.cacheDate(cached.lastModified, matches: modifiedDate),
            cached.fileSize == fileSize {
             return
         }
@@ -738,6 +761,10 @@ final class UsageTracker: ObservableObject {
 
     nonisolated private static func shouldReparseForUsageSchemaUpgrade(_ path: String) -> Bool {
         path.contains("/.codex/sessions/") || path.hasSuffix("/.codex/history.jsonl")
+    }
+
+    nonisolated private static func cacheDate(_ cachedDate: Date, matches fileDate: Date) -> Bool {
+        abs(cachedDate.timeIntervalSince(fileDate)) < 0.01
     }
 
     nonisolated private func saveCache(_ cache: UsageCache) async {

@@ -1524,7 +1524,7 @@ struct MenuBarView: View {
     }
 
     private var isRefreshing: Bool {
-        store.isRefreshing || usageTracker.isLoading
+        store.isRefreshing
     }
 
     @ViewBuilder
