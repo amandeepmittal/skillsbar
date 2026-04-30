@@ -21,9 +21,11 @@ final class SkillStore: ObservableObject {
     }
 
     private var watcher: FSEventsWatcher?
+    private var watchedRefreshTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
+    private var pendingRefresh = false
     private var watchedRefreshPrefixes: [String] = []
     private var watchedCreationMarkers: Set<String> = []
-    private var refreshGeneration: UInt64 = 0
     private var lastScannedSkills: [Skill] = []
     private var lastScannedAgents: [Agent] = []
     private(set) var usageTracker: UsageTracker?
@@ -32,6 +34,7 @@ final class SkillStore: ObservableObject {
     private static let pinnedOrderKey = "pinnedSkillOrder"
     private static let sortKey = "skillSortOption"
     private static let collectionsKey = "skillCollections"
+    private static let watchedRefreshDelay: UInt64 = 1_500_000_000
 
     init(usageTracker: UsageTracker? = nil) {
         self.usageTracker = usageTracker
@@ -535,17 +538,20 @@ final class SkillStore: ObservableObject {
     }
 
     func refresh() {
-        refreshGeneration += 1
-        let generation = refreshGeneration
+        guard refreshTask == nil else {
+            pendingRefresh = true
+            isRefreshing = true
+            return
+        }
+
         isRefreshing = true
 
-        Task(priority: .userInitiated) { [weak self] in
+        refreshTask = Task(priority: .userInitiated) { [weak self] in
             let scanned = await Task.detached(priority: .userInitiated) {
                 Self.scanContent()
             }.value
 
             guard let self else { return }
-            guard generation == self.refreshGeneration else { return }
 
             self.lastScannedSkills = scanned.skills
             self.lastScannedAgents = scanned.agents
@@ -553,7 +559,14 @@ final class SkillStore: ObservableObject {
             self.agentGroups = self.buildAgentGroups(from: scanned.agents)
             self.plugins = scanned.plugins
             self.lastRefreshDate = Date()
-            self.isRefreshing = false
+            self.refreshTask = nil
+
+            if self.pendingRefresh {
+                self.pendingRefresh = false
+                self.refresh()
+            } else {
+                self.isRefreshing = false
+            }
         }
     }
 
@@ -684,6 +697,8 @@ final class SkillStore: ObservableObject {
     // MARK: - Watching
 
     private func startWatching() {
+        watchedRefreshTask?.cancel()
+        watchedRefreshTask = nil
         watcher?.stop()
 
         let fileManager = FileManager.default
@@ -729,9 +744,22 @@ final class SkillStore: ObservableObject {
         watcher = FSEventsWatcher(paths: watchPaths) { [weak self] changedPaths in
             guard let self else { return }
             guard self.shouldRefresh(for: changedPaths) else { return }
-            self.refresh()
+            self.scheduleWatchedRefresh()
         }
         watcher?.start()
+    }
+
+    private func scheduleWatchedRefresh() {
+        watchedRefreshTask?.cancel()
+        watchedRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.watchedRefreshDelay)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                self?.watchedRefreshTask = nil
+                self?.refresh()
+            }
+        }
     }
 
     private func shouldRefresh(for changedPaths: [String]) -> Bool {
