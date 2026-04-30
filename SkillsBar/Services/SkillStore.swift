@@ -826,7 +826,7 @@ final class SkillStore: ObservableObject {
         ].compactMap { $0 }
 
         if !codexSections.isEmpty {
-            groups.append(SkillGroup(id: "codex-cli", title: "Codex CLI", sections: codexSections))
+            groups.append(SkillGroup(id: "codex-cli", title: "Codex", sections: codexSections))
         }
 
         return groups

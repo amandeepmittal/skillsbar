@@ -101,11 +101,11 @@ struct Skill: Identifiable, Hashable {
         case .claudeCode(.plugin):
             return "Use the Skill tool or type /skill-name in Claude Code"
         case .codexCLI(.builtin):
-            return "Available by default in Codex CLI"
+            return "Available by default in Codex"
         case .codexCLI(.plugin):
             return "Available through an installed Codex plugin"
         case .codexCLI(.user):
-            return "Available as an installed skill in Codex CLI"
+            return "Available as an installed skill in Codex"
         }
     }
 }

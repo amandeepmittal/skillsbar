@@ -18,7 +18,7 @@ enum SkillSource: Hashable {
     var groupTitle: String {
         switch self {
         case .claudeCode: return "Claude Code"
-        case .codexCLI: return "Codex CLI"
+        case .codexCLI: return "Codex"
         }
     }
 

@@ -3,7 +3,7 @@ import SwiftUI
 struct AboutView: View {
     @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
-    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.4"
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.5"
     private let heroCornerRadius: CGFloat = 22
     private let sectionCornerRadius: CGFloat = 16
     private let fileManager = FileManager.default
@@ -41,22 +41,22 @@ struct AboutView: View {
                         }
                     }
 
-                    infoSection(icon: "folder", title: "Watched Directories") {
+                    infoSection(icon: "folder", title: "Watched Paths") {
                         VStack(alignment: .leading, spacing: 12) {
                             VStack(spacing: 0) {
-                                ForEach(Array(watchedDirectories.enumerated()), id: \.element.displayPath) { index, directory in
-                                    directoryRow(directory.displayPath)
+                                ForEach(Array(watchedPaths.enumerated()), id: \.element.displayPath) { index, path in
+                                    directoryRow(path.displayPath)
 
-                                    if index < watchedDirectories.count - 1 {
+                                    if index < watchedPaths.count - 1 {
                                         sectionDivider
                                     }
                                 }
                             }
 
                             Menu {
-                                ForEach(watchedDirectories, id: \.displayPath) { directory in
-                                    Button(directory.displayPath) {
-                                        revealInFinder(directory.resolvedURL)
+                                ForEach(watchedPaths, id: \.displayPath) { path in
+                                    Button(path.displayPath) {
+                                        revealInFinder(path.resolvedURL)
                                     }
                                 }
                             } label: {
@@ -65,7 +65,7 @@ struct AboutView: View {
                                     .foregroundStyle(.blue)
                             }
                             .menuStyle(.borderlessButton)
-                            .help("Reveal watched folders in Finder")
+                            .help("Reveal watched paths in Finder")
                         }
                     }
 
@@ -110,7 +110,7 @@ struct AboutView: View {
                         .clipShape(Capsule())
                 }
 
-                Text("Browse Claude Code and Codex CLI skills, plugins, agents, and collections right from your menu bar.")
+                Text("Browse Claude Code and Codex skills, plugins, agents, and collections right from your menu bar.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -142,14 +142,17 @@ struct AboutView: View {
         skillStore.agentGroups.reduce(0) { $0 + $1.totalCount }
     }
 
-    private var watchedDirectories: [(displayPath: String, resolvedURL: URL)] {
+    private var watchedPaths: [(displayPath: String, resolvedURL: URL)] {
         let homeURL = fileManager.homeDirectoryForCurrentUser
         return [
             ("~/.claude/skills/", homeURL.appendingPathComponent(".claude/skills", isDirectory: true)),
             ("~/.claude/plugins/cache/", homeURL.appendingPathComponent(".claude/plugins/cache", isDirectory: true)),
             ("~/.claude/agents/", homeURL.appendingPathComponent(".claude/agents", isDirectory: true)),
+            ("~/.claude/projects/", homeURL.appendingPathComponent(".claude/projects", isDirectory: true)),
             ("~/.codex/skills/", homeURL.appendingPathComponent(".codex/skills", isDirectory: true)),
-            ("~/.codex/plugins/cache/", homeURL.appendingPathComponent(".codex/plugins/cache", isDirectory: true))
+            ("~/.codex/plugins/cache/", homeURL.appendingPathComponent(".codex/plugins/cache", isDirectory: true)),
+            ("~/.codex/history.jsonl", homeURL.appendingPathComponent(".codex/history.jsonl")),
+            ("~/.codex/sessions/", homeURL.appendingPathComponent(".codex/sessions", isDirectory: true))
         ]
     }
 

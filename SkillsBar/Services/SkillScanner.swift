@@ -41,7 +41,7 @@ struct SkillScanner {
         return skills
     }
 
-    // MARK: - Codex CLI
+    // MARK: - Codex
 
     /// Scans ~/.codex/skills/.system/ for built-in skills
     func scanCodexBuiltInSkills() -> [Skill] {

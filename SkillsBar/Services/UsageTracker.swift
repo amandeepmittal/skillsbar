@@ -12,7 +12,7 @@ private let iso8601Plain: ISO8601DateFormatter = {
     return formatter
 }()
 
-private let usageCacheSchemaVersion = 2
+private let usageCacheSchemaVersion = 3
 
 @MainActor
 final class UsageTracker: ObservableObject {
@@ -21,10 +21,12 @@ final class UsageTracker: ObservableObject {
     @Published var lastRefreshDate: Date?
 
     private var autoRefreshTimer: Timer?
+    private var watcher: FSEventsWatcher?
     private static let autoRefreshInterval: TimeInterval = 12 * 60 * 60
 
     deinit {
         autoRefreshTimer?.invalidate()
+        watcher?.stop()
     }
 
     private let cacheURL: URL = {
@@ -103,6 +105,7 @@ final class UsageTracker: ObservableObject {
 
     func startAutoRefresh() {
         stopAutoRefresh()
+        startWatching()
         autoRefreshTimer = Timer.scheduledTimer(
             withTimeInterval: Self.autoRefreshInterval,
             repeats: true
@@ -117,6 +120,28 @@ final class UsageTracker: ObservableObject {
     func stopAutoRefresh() {
         autoRefreshTimer?.invalidate()
         autoRefreshTimer = nil
+        watcher?.stop()
+        watcher = nil
+    }
+
+    private func startWatching() {
+        watcher?.stop()
+
+        let fileManager = FileManager.default
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        let watchPaths = [
+            "\(home)/.claude/projects",
+            "\(home)/.codex/history.jsonl",
+            "\(home)/.codex/sessions",
+        ].filter { fileManager.fileExists(atPath: $0) }
+
+        watcher = FSEventsWatcher(paths: watchPaths) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.refresh()
+            }
+        }
+        watcher?.start()
     }
 
     // MARK: - Incremental Parse
@@ -134,6 +159,10 @@ final class UsageTracker: ObservableObject {
         let codexHistoryPath = "\(home)/.codex/history.jsonl"
         if fileManager.fileExists(atPath: codexHistoryPath) {
             Self.refreshCachedFile(at: codexHistoryPath, parser: Self.parseCodexHistoryFile, cache: &cache, fileManager: fileManager)
+        }
+
+        for filePath in Self.codexDesktopSessionPaths(home: home, fileManager: fileManager) {
+            Self.refreshCachedFile(at: filePath, parser: Self.parseCodexDesktopSessionFile, cache: &cache, fileManager: fileManager)
         }
 
         cache.lastFullScanDate = Date()
@@ -161,6 +190,25 @@ final class UsageTracker: ObservableObject {
             }
         }
 
+        return paths
+    }
+
+    nonisolated private static func codexDesktopSessionPaths(home: String, fileManager: FileManager) -> [String] {
+        let sessionsDirectory = "\(home)/.codex/sessions"
+        return jsonlFilePathsRecursively(in: sessionsDirectory, fileManager: fileManager)
+    }
+
+    nonisolated private static func jsonlFilePathsRecursively(in directory: String, fileManager: FileManager) -> [String] {
+        guard fileManager.fileExists(atPath: directory),
+              let enumerator = fileManager.enumerator(atPath: directory) else {
+            return []
+        }
+
+        var paths: [String] = []
+        while let relativePath = enumerator.nextObject() as? String {
+            guard relativePath.hasSuffix(".jsonl") else { continue }
+            paths.append((directory as NSString).appendingPathComponent(relativePath))
+        }
         return paths
     }
 
@@ -305,6 +353,90 @@ final class UsageTracker: ObservableObject {
         return invocations
     }
 
+    nonisolated private static func parseCodexDesktopSessionFile(at path: String) -> [SkillInvocation] {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return [] }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+            if let date = iso8601WithFractional.date(from: string) { return date }
+            if let date = iso8601Plain.date(from: string) { return date }
+            return Date.distantPast
+        }
+
+        var sessionId = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+        var projectPath: String?
+        var isCodexDesktopSession = false
+        var candidates: [CodexSkillCandidate] = []
+
+        for line in data.split(separator: UInt8(ascii: "\n")) {
+            guard let entry = try? decoder.decode(CodexRolloutLine.self, from: Data(line)) else {
+                continue
+            }
+
+            if entry.type == "session_meta", let payload = entry.payload {
+                sessionId = payload.id ?? sessionId
+                projectPath = payload.cwd
+                isCodexDesktopSession = payload.originator == "Codex Desktop"
+                continue
+            }
+
+            guard isCodexDesktopSession,
+                  entry.type == "response_item",
+                  entry.payload?.type == "message",
+                  let role = entry.payload?.role,
+                  let content = entry.payload?.content else {
+                continue
+            }
+
+            let text = content.compactMap(\.text).joined(separator: "\n")
+            let timestamp = entry.timestamp ?? Date.distantPast
+
+            switch role {
+            case "user":
+                for skillName in extractCodexSkillNames(from: text) {
+                    candidates.append(CodexSkillCandidate(skillName: skillName, timestamp: timestamp, isExplicitTrigger: true))
+                }
+            case "assistant":
+                for skillName in extractCodexAssistantSkillNames(from: text) {
+                    candidates.append(CodexSkillCandidate(skillName: skillName, timestamp: timestamp, isExplicitTrigger: false))
+                }
+            default:
+                continue
+            }
+        }
+
+        var invocations: [SkillInvocation] = []
+        var lastExplicitTriggerBySkill: [String: Date] = [:]
+        var seenInvocationKeys: Set<String> = []
+        let duplicateWindow: TimeInterval = 15 * 60
+
+        for candidate in candidates {
+            if candidate.isExplicitTrigger {
+                lastExplicitTriggerBySkill[candidate.skillName] = candidate.timestamp
+            } else if let explicitDate = lastExplicitTriggerBySkill[candidate.skillName],
+                      abs(candidate.timestamp.timeIntervalSince(explicitDate)) <= duplicateWindow {
+                continue
+            }
+
+            let timestampKey = Int(candidate.timestamp.timeIntervalSince1970)
+            let invocationKey = "\(sessionId)::\(timestampKey)::\(candidate.skillName)"
+            guard seenInvocationKeys.insert(invocationKey).inserted else { continue }
+
+            invocations.append(SkillInvocation(
+                source: .codexCLI,
+                skillName: candidate.skillName,
+                args: nil,
+                timestamp: candidate.timestamp,
+                sessionId: sessionId,
+                projectPath: projectPath
+            ))
+        }
+
+        return invocations
+    }
+
     nonisolated private static func extractCodexSkillNames(from text: String) -> [String] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -340,6 +472,32 @@ final class UsageTracker: ObservableObject {
             let token = String(remainder.prefix(while: Self.isSkillNameCharacter))
             if let skillName = normalizedSkillName(token, source: .codexCLI) {
                 results.append(skillName)
+            }
+        }
+
+        var seen: Set<String> = []
+        return results.filter { seen.insert($0).inserted }
+    }
+
+    nonisolated private static func extractCodexAssistantSkillNames(from text: String) -> [String] {
+        let patterns = [
+            #"(?i)\busing\s+(?:the\s+)?skill:?\s+`?([A-Za-z0-9][A-Za-z0-9._:-]*)`?"#,
+            #"(?i)\busing\s+(?:the\s+)?`?([A-Za-z0-9][A-Za-z0-9._:-]*)`?\s+(?:skill|guidance)\b"#,
+            #"(?i)\binvoking\s+(?:the\s+)?skill:?\s+`?([A-Za-z0-9][A-Za-z0-9._:-]*)`?"#,
+        ]
+
+        var results: [String] = []
+        let nsText = text as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            for match in regex.matches(in: text, range: fullRange) {
+                guard match.numberOfRanges > 1 else { continue }
+                let token = nsText.substring(with: match.range(at: 1))
+                if let skillName = normalizedSkillName(token, source: .codexCLI) {
+                    results.append(skillName)
+                }
             }
         }
 
@@ -508,4 +666,29 @@ private struct CodexHistoryLine: Decodable {
         case ts
         case text
     }
+}
+
+private struct CodexRolloutLine: Decodable {
+    let timestamp: Date?
+    let type: String?
+    let payload: CodexRolloutPayload?
+}
+
+private struct CodexRolloutPayload: Decodable {
+    let id: String?
+    let originator: String?
+    let cwd: String?
+    let type: String?
+    let role: String?
+    let content: [CodexRolloutContent]?
+}
+
+private struct CodexRolloutContent: Decodable {
+    let text: String?
+}
+
+private struct CodexSkillCandidate {
+    let skillName: String
+    let timestamp: Date
+    let isExplicitTrigger: Bool
 }

@@ -9,7 +9,7 @@ enum UsageSource: String, Codable, CaseIterable, Hashable {
         case .claudeCode:
             return "Claude Code"
         case .codexCLI:
-            return "Codex CLI"
+            return "Codex"
         }
     }
 

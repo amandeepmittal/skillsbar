@@ -4,7 +4,7 @@ struct Plugin: Identifiable, Hashable {
     enum Source: Hashable {
         case codexCLI
 
-        var groupTitle: String { "Codex CLI" }
+        var groupTitle: String { "Codex" }
         var sectionTitle: String { "Installed Plugins" }
         var iconName: String { "OpenAILogo" }
     }
