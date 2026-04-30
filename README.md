@@ -38,6 +38,7 @@
 - **Search** - filter skills, plugins, and collections by name, description, or trigger
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
 - **Settings** - choose whether to show What's New, switch between system, light, and dark appearance, and control the default sort from one place
+- **Start at Login** - open SkillsBar automatically when you sign in, with a shortcut to Login Items settings if approval is needed
 - **Sort options** - sort skills by A-Z, Recently Modified, or Most Used, with the selected order persisted across restarts
 - **Collections** - create custom cross-source groups that can mix Claude Code and Codex skills in one saved view
 - **Codex plugin browsing** - browse installed Codex plugins with version, publisher, capabilities, included skills, and quick open/reveal actions
