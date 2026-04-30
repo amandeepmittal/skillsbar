@@ -4,7 +4,7 @@ struct AgentDetailView: View {
     let agent: Agent
     let isPinned: Bool
     let onBack: () -> Void
-    let onDelete: (Agent) -> Void
+    let onDelete: (Agent) -> Bool
     let onTogglePin: (Agent) -> Void
     let onCopyPath: () -> Void
     let onCopyIdentifier: () -> Void
@@ -279,14 +279,15 @@ struct AgentDetailView: View {
             }
         }
         .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.detailHeight)
-        .alert("Delete Agent", isPresented: $showDeleteConfirmation) {
+        .alert("Move Agent to Trash", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                onDelete(agent)
-                onBack()
+            Button("Move to Trash", role: .destructive) {
+                if onDelete(agent) {
+                    onBack()
+                }
             }
         } message: {
-            Text("Delete \"\(agent.displayName)\"? This will remove the agent file and cannot be undone.")
+            Text("Move \"\(agent.displayName)\" to Trash?")
         }
     }
 

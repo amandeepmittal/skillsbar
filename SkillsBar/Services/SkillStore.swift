@@ -562,25 +562,40 @@ final class SkillStore: ObservableObject {
         groups = buildGroups(from: lastScannedSkills)
     }
 
-    func deleteSkill(_ skill: Skill) {
+    @discardableResult
+    func deleteSkill(_ skill: Skill) -> Bool {
         let fileManager = FileManager.default
         let skillDir = (skill.path as NSString).deletingLastPathComponent
 
-        try? fileManager.removeItem(atPath: skillDir)
+        do {
+            try fileManager.trashItem(at: URL(fileURLWithPath: skillDir), resultingItemURL: nil)
+        } catch {
+            return false
+        }
+
         pinnedPaths.remove(skill.path)
         pinnedOrder.removeAll { $0 == skill.path }
         persistPins()
         removeSkillPathFromCollections(skill.path)
         refresh()
+        return true
     }
 
-    func deleteAgent(_ agent: Agent) {
+    @discardableResult
+    func deleteAgent(_ agent: Agent) -> Bool {
         let fileManager = FileManager.default
-        try? fileManager.removeItem(atPath: agent.path)
+
+        do {
+            try fileManager.trashItem(at: URL(fileURLWithPath: agent.path), resultingItemURL: nil)
+        } catch {
+            return false
+        }
+
         pinnedPaths.remove(agent.path)
         pinnedOrder.removeAll { $0 == agent.path }
         persistPins()
         refresh()
+        return true
     }
 
     static func openInVSCode(_ skill: Skill) {

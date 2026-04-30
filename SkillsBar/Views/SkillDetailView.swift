@@ -7,7 +7,7 @@ struct SkillDetailView: View {
     let collections: [SkillCollection]
     let skillCollections: [SkillCollection]
     let onBack: () -> Void
-    let onDelete: (Skill) -> Void
+    let onDelete: (Skill) -> Bool
     let onTogglePin: (Skill) -> Void
     let onToggleCollectionMembership: (SkillCollection) -> Void
     let onCreateCollection: (Skill) -> Void
@@ -410,14 +410,15 @@ struct SkillDetailView: View {
             }
         }
         .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.detailHeight)
-        .alert("Delete Skill", isPresented: $showDeleteConfirmation) {
+        .alert("Move Skill to Trash", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                onDelete(skill)
-                onBack()
+            Button("Move to Trash", role: .destructive) {
+                if onDelete(skill) {
+                    onBack()
+                }
             }
         } message: {
-            Text("Delete \"\(skill.displayName)\"? This will remove the entire skill folder and cannot be undone.")
+            Text("Move \"\(skill.displayName)\" and its folder to Trash?")
         }
     }
 

@@ -43,6 +43,7 @@ struct MenuBarView: View {
     @State private var editingCollectionName = ""
     @State private var copyToastMessage: String?
     @State private var copyToastDismissWorkItem: DispatchWorkItem?
+    @State private var pendingDeletion: DeleteRequest?
     @FocusState private var isSearchFieldFocused: Bool
 
     private enum ListItem {
@@ -54,6 +55,20 @@ struct MenuBarView: View {
             case .skill(let s): return s.id
             case .agent(let a): return a.id
             case .plugin(let p): return p.id
+            }
+        }
+    }
+
+    private enum DeleteRequest: Identifiable {
+        case skill(Skill)
+        case agent(Agent)
+
+        var id: String {
+            switch self {
+            case .skill(let skill):
+                return "skill-\(skill.id)"
+            case .agent(let agent):
+                return "agent-\(agent.id)"
             }
         }
     }
@@ -117,7 +132,7 @@ struct MenuBarView: View {
                     isPinned: store.isPinnedAgent(agent),
                     onBack: { selectedAgent = nil },
                     onDelete: { agent in
-                        store.deleteAgent(agent)
+                        moveAgentToTrash(agent)
                     },
                     onTogglePin: { agent in
                         store.togglePinAgent(agent)
@@ -151,7 +166,7 @@ struct MenuBarView: View {
                     skillCollections: store.collections(for: skill),
                     onBack: { selectedSkill = nil },
                     onDelete: { skill in
-                        store.deleteSkill(skill)
+                        moveSkillToTrash(skill)
                     },
                     onTogglePin: { skill in
                         store.togglePin(skill)
@@ -182,6 +197,16 @@ struct MenuBarView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .allowsHitTesting(false)
             }
+        }
+        .alert(deleteConfirmationTitle, isPresented: deleteConfirmationBinding) {
+            Button("Cancel", role: .cancel) {
+                pendingDeletion = nil
+            }
+            Button("Move to Trash", role: .destructive) {
+                confirmPendingDeletion()
+            }
+        } message: {
+            Text(deleteConfirmationMessage)
         }
         .onAppear {
             highlightedItemId = nil
@@ -664,7 +689,7 @@ struct MenuBarView: View {
             }
             Divider()
             Button("Delete Skill", role: .destructive) {
-                store.deleteSkill(skill)
+                pendingDeletion = .skill(skill)
             }
         }
     }
@@ -1277,7 +1302,7 @@ struct MenuBarView: View {
             }
             Divider()
             Button("Delete Agent", role: .destructive) {
-                store.deleteAgent(agent)
+                pendingDeletion = .agent(agent)
             }
         }
     }
@@ -1762,6 +1787,77 @@ struct MenuBarView: View {
         guard !isRefreshing else { return }
         store.refresh()
         usageTracker.refresh()
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeletion != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDeletion = nil
+                }
+            }
+        )
+    }
+
+    private var deleteConfirmationTitle: String {
+        switch pendingDeletion {
+        case .skill:
+            return "Move Skill to Trash"
+        case .agent:
+            return "Move Agent to Trash"
+        case nil:
+            return "Move to Trash"
+        }
+    }
+
+    private var deleteConfirmationMessage: String {
+        switch pendingDeletion {
+        case .skill(let skill):
+            return "Move \"\(skill.displayName)\" and its folder to Trash?"
+        case .agent(let agent):
+            return "Move \"\(agent.displayName)\" to Trash?"
+        case nil:
+            return ""
+        }
+    }
+
+    private func confirmPendingDeletion() {
+        guard let pendingDeletion else { return }
+        self.pendingDeletion = nil
+
+        switch pendingDeletion {
+        case .skill(let skill):
+            _ = moveSkillToTrash(skill)
+        case .agent(let agent):
+            _ = moveAgentToTrash(agent)
+        }
+    }
+
+    private func moveSkillToTrash(_ skill: Skill) -> Bool {
+        guard store.deleteSkill(skill) else {
+            showCopyToast("Could not move to Trash")
+            return false
+        }
+
+        if selectedSkill?.id == skill.id {
+            selectedSkill = nil
+        }
+        showCopyToast("Moved to Trash")
+        return true
+    }
+
+    private func moveAgentToTrash(_ agent: Agent) -> Bool {
+        guard store.deleteAgent(agent) else {
+            showCopyToast("Could not move to Trash")
+            return false
+        }
+
+        if selectedAgent?.id == agent.id {
+            selectedAgent = nil
+        }
+        showCopyToast("Moved to Trash")
+        return true
     }
 
     private func clearMissingSkills(in resolvedCollection: ResolvedSkillCollection) {
