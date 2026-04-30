@@ -12,7 +12,17 @@ private let iso8601Plain: ISO8601DateFormatter = {
     return formatter
 }()
 
-private let usageCacheSchemaVersion = 3
+private let usageCacheSchemaVersion = 6
+private let maxJSONLineBytes = 16 * 1024 * 1024
+
+private let codexRolloutSkillSignalBytes = [
+    Array("$".utf8),
+    Array("/skills".utf8),
+    Array("Using".utf8),
+    Array("using".utf8),
+    Array("Invoking".utf8),
+    Array("invoking".utf8),
+]
 
 @MainActor
 final class UsageTracker: ObservableObject {
@@ -251,9 +261,6 @@ final class UsageTracker: ObservableObject {
             return Date.distantPast
         }
 
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return [] }
-        let lines = data.split(separator: UInt8(ascii: "\n"))
-
         let components = path.components(separatedBy: "/")
         let projectPath: String? = {
             if let index = components.firstIndex(of: "projects"), index + 1 < components.count {
@@ -264,11 +271,11 @@ final class UsageTracker: ObservableObject {
 
         let skillDirectoryPrefix = "Base directory for this skill:"
 
-        for line in lines {
-            guard let lineString = String(data: Data(line), encoding: .utf8) else { continue }
+        readJSONLines(at: path) { line in
+            guard let lineString = String(data: line, encoding: .utf8) else { return }
 
             if lineString.contains("\"Skill\""),
-               let sessionLine = try? decoder.decode(SessionLine.self, from: Data(line)),
+               let sessionLine = try? decoder.decode(SessionLine.self, from: line),
                sessionLine.type == "assistant",
                let content = sessionLine.message?.content {
                 for block in content {
@@ -291,7 +298,7 @@ final class UsageTracker: ObservableObject {
             }
 
             if lineString.contains(skillDirectoryPrefix),
-               let sessionLine = try? decoder.decode(SessionLine.self, from: Data(line)),
+               let sessionLine = try? decoder.decode(SessionLine.self, from: line),
                sessionLine.type == "user",
                let content = sessionLine.message?.content {
                 for block in content {
@@ -326,15 +333,13 @@ final class UsageTracker: ObservableObject {
     // MARK: - Parse Codex History
 
     nonisolated private static func parseCodexHistoryFile(at path: String) -> [SkillInvocation] {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return [] }
-
         let decoder = JSONDecoder()
         var invocations: [SkillInvocation] = []
 
-        for line in data.split(separator: UInt8(ascii: "\n")) {
-            guard let entry = try? decoder.decode(CodexHistoryLine.self, from: Data(line)),
+        readJSONLines(at: path) { line in
+            guard let entry = try? decoder.decode(CodexHistoryLine.self, from: line),
                   let text = entry.text else {
-                continue
+                return
             }
 
             let timestamp = Date(timeIntervalSince1970: TimeInterval(entry.ts))
@@ -354,8 +359,6 @@ final class UsageTracker: ObservableObject {
     }
 
     nonisolated private static func parseCodexDesktopSessionFile(at path: String) -> [SkillInvocation] {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return [] }
-
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -370,16 +373,20 @@ final class UsageTracker: ObservableObject {
         var isCodexDesktopSession = false
         var candidates: [CodexSkillCandidate] = []
 
-        for line in data.split(separator: UInt8(ascii: "\n")) {
-            guard let entry = try? decoder.decode(CodexRolloutLine.self, from: Data(line)) else {
-                continue
-            }
-
-            if entry.type == "session_meta", let payload = entry.payload {
+        readJSONLines(at: path) { line in
+            if containsByteSequence(line, Array(#""type":"session_meta""#.utf8)),
+               let entry = try? decoder.decode(CodexRolloutLine.self, from: line),
+               let payload = entry.payload {
                 sessionId = payload.id ?? sessionId
                 projectPath = payload.cwd
                 isCodexDesktopSession = payload.originator == "Codex Desktop"
-                continue
+                return
+            }
+
+            guard isCodexDesktopSession,
+                  codexRolloutLineContainsSkillSignal(line),
+                  let entry = try? decoder.decode(CodexRolloutLine.self, from: line) else {
+                return
             }
 
             guard isCodexDesktopSession,
@@ -387,7 +394,7 @@ final class UsageTracker: ObservableObject {
                   entry.payload?.type == "message",
                   let role = entry.payload?.role,
                   let content = entry.payload?.content else {
-                continue
+                return
             }
 
             let text = content.compactMap(\.text).joined(separator: "\n")
@@ -403,7 +410,7 @@ final class UsageTracker: ObservableObject {
                     candidates.append(CodexSkillCandidate(skillName: skillName, timestamp: timestamp, isExplicitTrigger: false))
                 }
             default:
-                continue
+                return
             }
         }
 
@@ -443,12 +450,29 @@ final class UsageTracker: ObservableObject {
 
         var results: [String] = []
 
-        if trimmed.hasPrefix("$") {
-            let start = trimmed.index(after: trimmed.startIndex)
-            let token = String(trimmed[start...].prefix(while: Self.isSkillNameCharacter))
-            if token.contains(where: \.isLetter),
-               let skillName = normalizedSkillName(token, source: .codexCLI) {
+        if let regex = try? NSRegularExpression(pattern: #"(^|[^A-Za-z0-9_])\$([A-Za-z0-9][A-Za-z0-9._:-]*)"#) {
+            let nsText = trimmed as NSString
+            let fullRange = NSRange(location: 0, length: nsText.length)
+            for match in regex.matches(in: trimmed, range: fullRange) {
+                guard match.numberOfRanges > 2 else { continue }
+                let token = nsText.substring(with: match.range(at: 2))
+                guard token.contains(where: \.isLetter),
+                      let skillName = normalizedSkillName(token, source: .codexCLI) else {
+                    continue
+                }
                 results.append(skillName)
+            }
+        }
+
+        if let regex = try? NSRegularExpression(pattern: #"<skill>\s*<name>\s*([A-Za-z0-9][A-Za-z0-9._:-]*)\s*</name>"#) {
+            let nsText = trimmed as NSString
+            let fullRange = NSRange(location: 0, length: nsText.length)
+            for match in regex.matches(in: trimmed, range: fullRange) {
+                guard match.numberOfRanges > 1 else { continue }
+                let token = nsText.substring(with: match.range(at: 1))
+                if let skillName = normalizedSkillName(token, source: .codexCLI) {
+                    results.append(skillName)
+                }
             }
         }
 
@@ -477,6 +501,84 @@ final class UsageTracker: ObservableObject {
 
         var seen: Set<String> = []
         return results.filter { seen.insert($0).inserted }
+    }
+
+    nonisolated private static func readJSONLines(at path: String, handleLine: (Data) -> Void) {
+        guard let fileHandle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: path)) else { return }
+        defer { try? fileHandle.close() }
+
+        let delimiter = UInt8(ascii: "\n")
+        let delimiterData = Data([delimiter])
+        let chunkSize = 1024 * 1024
+        var buffer = Data()
+        var isSkippingOversizedLine = false
+
+        while true {
+            guard let chunk = try? fileHandle.read(upToCount: chunkSize),
+                  !chunk.isEmpty else {
+                break
+            }
+
+            var chunkStart = chunk.startIndex
+            if isSkippingOversizedLine {
+                if let newlineIndex = chunk[chunkStart...].firstIndex(of: delimiter) {
+                    isSkippingOversizedLine = false
+                    chunkStart = chunk.index(after: newlineIndex)
+                } else {
+                    continue
+                }
+            }
+
+            if chunkStart != chunk.endIndex {
+                buffer.append(chunk[chunkStart...])
+            }
+
+            while let range = buffer.firstRange(of: delimiterData) {
+                let line = buffer.subdata(in: buffer.startIndex..<range.lowerBound)
+                if !line.isEmpty && line.count <= maxJSONLineBytes {
+                    handleLine(line)
+                }
+                buffer.removeSubrange(buffer.startIndex..<range.upperBound)
+            }
+
+            if buffer.count > maxJSONLineBytes {
+                buffer.removeAll(keepingCapacity: true)
+                isSkippingOversizedLine = true
+            }
+        }
+
+        if !isSkippingOversizedLine && !buffer.isEmpty && buffer.count <= maxJSONLineBytes {
+            handleLine(buffer)
+        }
+    }
+
+    nonisolated private static func codexRolloutLineContainsSkillSignal<C: Collection>(_ line: C) -> Bool where C.Element == UInt8 {
+        codexRolloutSkillSignalBytes.contains { containsByteSequence(line, $0) }
+    }
+
+    nonisolated private static func containsByteSequence<C: Collection>(_ haystack: C, _ needle: [UInt8]) -> Bool where C.Element == UInt8 {
+        guard !needle.isEmpty else { return true }
+
+        var index = haystack.startIndex
+        while index != haystack.endIndex {
+            var currentIndex = index
+            var needleIndex = needle.startIndex
+
+            while needleIndex != needle.endIndex,
+                  currentIndex != haystack.endIndex,
+                  haystack[currentIndex] == needle[needleIndex] {
+                haystack.formIndex(after: &currentIndex)
+                needle.formIndex(after: &needleIndex)
+            }
+
+            if needleIndex == needle.endIndex {
+                return true
+            }
+
+            haystack.formIndex(after: &index)
+        }
+
+        return false
     }
 
     nonisolated private static func extractCodexAssistantSkillNames(from text: String) -> [String] {
@@ -565,7 +667,13 @@ final class UsageTracker: ObservableObject {
     nonisolated private static func normalizedSkillName(_ value: String?, source: UsageSource) -> String? {
         guard let value else { return nil }
         let normalized = normalizeTriggerCommand(value, source: source)
-        return normalized.isEmpty ? nil : normalized
+        guard !normalized.isEmpty else { return nil }
+
+        if source == .codexCLI, !isLikelyCodexSkillIdentifier(normalized) {
+            return nil
+        }
+
+        return normalized
     }
 
     nonisolated static func normalizeTriggerCommand(_ triggerCommand: String, source: UsageSource) -> String {
@@ -597,6 +705,12 @@ final class UsageTracker: ObservableObject {
         }
     }
 
+    nonisolated private static func isLikelyCodexSkillIdentifier(_ value: String) -> Bool {
+        value == value.lowercased()
+            && value.contains(where: \.isLetter)
+            && value.allSatisfy(isSkillNameCharacter)
+    }
+
     // MARK: - Cache I/O
 
     nonisolated private func loadCache() async -> UsageCache {
@@ -610,11 +724,20 @@ final class UsageTracker: ObservableObject {
             if let date = iso8601Plain.date(from: string) { return date }
             return Date.distantPast
         }
-        guard let cache = try? decoder.decode(UsageCache.self, from: data),
-              cache.schemaVersion == usageCacheSchemaVersion else {
+        guard var cache = try? decoder.decode(UsageCache.self, from: data) else {
             return UsageCache(schemaVersion: usageCacheSchemaVersion)
         }
+
+        if cache.schemaVersion != usageCacheSchemaVersion {
+            cache.schemaVersion = usageCacheSchemaVersion
+            cache.parsedFiles = cache.parsedFiles.filter { !Self.shouldReparseForUsageSchemaUpgrade($0.key) }
+        }
+
         return cache
+    }
+
+    nonisolated private static func shouldReparseForUsageSchemaUpgrade(_ path: String) -> Bool {
+        path.contains("/.codex/sessions/") || path.hasSuffix("/.codex/history.jsonl")
     }
 
     nonisolated private func saveCache(_ cache: UsageCache) async {
