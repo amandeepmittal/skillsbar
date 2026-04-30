@@ -12,7 +12,7 @@ private let iso8601Plain: ISO8601DateFormatter = {
     return formatter
 }()
 
-private let usageCacheSchemaVersion = 6
+private let usageCacheSchemaVersion = 7
 private let maxJSONLineBytes = 16 * 1024 * 1024
 
 private let codexRolloutSkillSignalBytes = [
@@ -33,8 +33,10 @@ final class UsageTracker: ObservableObject {
     private var autoRefreshTimer: Timer?
     private var watcher: FSEventsWatcher?
     private var watchedRefreshTask: Task<Void, Never>?
+    private var lastWatchedRefreshDate: Date?
     private static let autoRefreshInterval: TimeInterval = 12 * 60 * 60
     private static let watchedRefreshDelay: UInt64 = 5 * 1_000_000_000
+    private static let watchedRefreshCooldown: TimeInterval = 30
 
     deinit {
         autoRefreshTimer?.invalidate()
@@ -173,6 +175,11 @@ final class UsageTracker: ObservableObject {
         watchedRefreshTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.watchedRefreshDelay)
             guard !Task.isCancelled else { return }
+            if let lastWatchedRefreshDate = self?.lastWatchedRefreshDate,
+               Date().timeIntervalSince(lastWatchedRefreshDate) < Self.watchedRefreshCooldown {
+                return
+            }
+            self?.lastWatchedRefreshDate = Date()
             self?.refresh()
         }
     }
