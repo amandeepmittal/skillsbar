@@ -7,8 +7,13 @@ struct PluginDetailView: View {
     let onCopyPath: () -> Void
     let onSelectSkill: (Skill) -> Void
 
+    @AppStorage(AppPreferenceKey.preferredEditor) private var preferredEditorRaw = ExternalEditor.visualStudioCode.rawValue
+
     private let cardBg = Color.primary.opacity(0.10)
     private let pluginColor = Color.purple
+    private var preferredEditor: ExternalEditor {
+        ExternalEditor.resolved(for: preferredEditorRaw)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,15 +34,9 @@ struct PluginDetailView: View {
                 HStack(spacing: 6) {
                     actionButton(
                         icon: "chevron.left.forwardslash.chevron.right",
-                        label: "VS Code",
+                        label: preferredEditor.shortTitle,
                         color: .secondary,
-                        action: { SkillStore.openPluginInVSCode(plugin) }
-                    )
-                    actionButton(
-                        icon: "square.and.pencil",
-                        label: "Editor",
-                        color: .secondary,
-                        action: { SkillStore.openPluginInDefaultEditor(plugin) }
+                        action: { SkillStore.openPlugin(plugin, in: preferredEditor) }
                     )
                     actionButton(
                         icon: "doc.on.doc",

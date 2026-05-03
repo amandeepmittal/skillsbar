@@ -11,9 +11,13 @@ struct AgentDetailView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var showFullContent = false
+    @AppStorage(AppPreferenceKey.preferredEditor) private var preferredEditorRaw = ExternalEditor.visualStudioCode.rawValue
 
     private let cardBg = Color.primary.opacity(0.10)
     private let agentColor = Color(red: 0.0, green: 0.45, blue: 0.5)
+    private var preferredEditor: ExternalEditor {
+        ExternalEditor.resolved(for: preferredEditorRaw)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -42,15 +46,9 @@ struct AgentDetailView: View {
                     )
                     actionButton(
                         icon: "chevron.left.forwardslash.chevron.right",
-                        label: "VS Code",
+                        label: preferredEditor.shortTitle,
                         color: .secondary,
-                        action: { SkillStore.openAgentInVSCode(agent) }
-                    )
-                    actionButton(
-                        icon: "square.and.pencil",
-                        label: "Editor",
-                        color: .secondary,
-                        action: { SkillStore.openAgentInDefaultEditor(agent) }
+                        action: { SkillStore.openAgent(agent, in: preferredEditor) }
                     )
                     actionButton(
                         icon: "doc.on.doc",

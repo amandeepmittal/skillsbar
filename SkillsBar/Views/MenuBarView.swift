@@ -16,6 +16,7 @@ struct MenuBarView: View {
     @AppStorage("selectedTab") private var selectedTab: SkillStore.SkillTab = .claudeCode
     @AppStorage(AppPreferenceKey.preferredAppearance) private var preferredAppearanceRaw = AppAppearance.system.rawValue
     @AppStorage(AppPreferenceKey.showsWhatsNewSection) private var showsWhatsNewSection = true
+    @AppStorage(AppPreferenceKey.preferredEditor) private var preferredEditorRaw = ExternalEditor.visualStudioCode.rawValue
     @State private var showSettings = false
     @State private var showAbout = false
     @State private var showUsageStats = false
@@ -339,13 +340,13 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Open global AI instructions in VS Code")
+                .help("Open global AI instructions in \(preferredEditor.shortTitle)")
                 .popover(isPresented: $showInstructionsPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(SkillStore.GlobalInstructionsFile.allCases) { file in
                             Button(action: {
                                 showInstructionsPopover = false
-                                SkillStore.openInstructionsFileInVSCode(file)
+                                SkillStore.openInstructionsFile(file, in: preferredEditor)
                             }) {
                                 Text("Open \(file.displayName)")
                                     .font(.system(size: 13))
@@ -671,11 +672,8 @@ struct MenuBarView: View {
                 }
                 Divider()
             }
-            Button("Open in VS Code") {
-                SkillStore.openInVSCode(skill)
-            }
-            Button("Open in Default Editor") {
-                SkillStore.openInDefaultEditor(skill)
+            Button(preferredEditor.openMenuTitle) {
+                SkillStore.openSkill(skill, in: preferredEditor)
             }
             Button("Reveal in Finder") {
                 SkillStore.revealInFinder(skill)
@@ -749,11 +747,8 @@ struct MenuBarView: View {
         }
         .id(plugin.id)
         .contextMenu {
-            Button("Open in VS Code") {
-                SkillStore.openPluginInVSCode(plugin)
-            }
-            Button("Open in Default Editor") {
-                SkillStore.openPluginInDefaultEditor(plugin)
+            Button(preferredEditor.openMenuTitle) {
+                SkillStore.openPlugin(plugin, in: preferredEditor)
             }
             Button("Reveal in Finder") {
                 SkillStore.revealPluginInFinder(plugin)
@@ -1287,11 +1282,8 @@ struct MenuBarView: View {
                 }
             }
             Divider()
-            Button("Open in VS Code") {
-                SkillStore.openAgentInVSCode(agent)
-            }
-            Button("Open in Default Editor") {
-                SkillStore.openAgentInDefaultEditor(agent)
+            Button(preferredEditor.openMenuTitle) {
+                SkillStore.openAgent(agent, in: preferredEditor)
             }
             Button("Reveal in Finder") {
                 SkillStore.revealAgentInFinder(agent)
@@ -1887,6 +1879,10 @@ struct MenuBarView: View {
 
     private var preferredAppearance: AppAppearance {
         AppAppearance(rawValue: preferredAppearanceRaw) ?? .system
+    }
+
+    private var preferredEditor: ExternalEditor {
+        ExternalEditor.resolved(for: preferredEditorRaw)
     }
 
     private func showCopyToast(_ message: String) {

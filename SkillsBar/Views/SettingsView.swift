@@ -6,7 +6,9 @@ struct SettingsView: View {
 
     @AppStorage(AppPreferenceKey.showsWhatsNewSection) private var showsWhatsNewSection = true
     @AppStorage(AppPreferenceKey.preferredAppearance) private var preferredAppearanceRaw = AppAppearance.system.rawValue
+    @AppStorage(AppPreferenceKey.preferredEditor) private var preferredEditorRaw = ExternalEditor.visualStudioCode.rawValue
     @StateObject private var loginItemController = LoginItemController()
+    @State private var installedEditors = ExternalEditor.installedEditors
 
     private let sectionCornerRadius: CGFloat = 16
     private var startAtLoginBinding: Binding<Bool> {
@@ -114,6 +116,30 @@ struct SettingsView: View {
                         }
                     }
 
+                    infoSection(icon: "chevron.left.forwardslash.chevron.right", title: "Editor") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if installedEditors.isEmpty {
+                                Text("No supported editors were found. Install VS Code, WebStorm, Cursor, Zed, or another supported editor to choose it here.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Picker("", selection: $preferredEditorRaw) {
+                                    ForEach(installedEditors) { editor in
+                                        Text(editor.title).tag(editor.rawValue)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+
+                                Text("Choose which installed editor opens skills, agents, plugins, and global instructions.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+
                     infoSection(icon: "arrow.up.arrow.down", title: "Default Sort") {
                         VStack(alignment: .leading, spacing: 10) {
                             Picker("", selection: $skillStore.sortOption) {
@@ -139,6 +165,19 @@ struct SettingsView: View {
         .frame(width: SkillsBarLayout.windowWidth, height: SkillsBarLayout.aboutHeight)
         .onAppear {
             loginItemController.refresh()
+            refreshInstalledEditors()
+        }
+    }
+
+    private func refreshInstalledEditors() {
+        installedEditors = ExternalEditor.installedEditors
+
+        guard !installedEditors.isEmpty else {
+            return
+        }
+
+        if !installedEditors.contains(where: { $0.rawValue == preferredEditorRaw }) {
+            preferredEditorRaw = ExternalEditor.defaultEditor.rawValue
         }
     }
 

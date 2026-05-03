@@ -16,8 +16,12 @@ struct SkillDetailView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var showFullContent = false
+    @AppStorage(AppPreferenceKey.preferredEditor) private var preferredEditorRaw = ExternalEditor.visualStudioCode.rawValue
 
     private let cardBg = Color.primary.opacity(0.10)
+    private var preferredEditor: ExternalEditor {
+        ExternalEditor.resolved(for: preferredEditorRaw)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,15 +50,9 @@ struct SkillDetailView: View {
                     )
                     actionButton(
                         icon: "chevron.left.forwardslash.chevron.right",
-                        label: "VS Code",
+                        label: preferredEditor.shortTitle,
                         color: .secondary,
-                        action: { SkillStore.openInVSCode(skill) }
-                    )
-                    actionButton(
-                        icon: "square.and.pencil",
-                        label: "Editor",
-                        color: .secondary,
-                        action: { SkillStore.openInDefaultEditor(skill) }
+                        action: { SkillStore.openSkill(skill, in: preferredEditor) }
                     )
                     actionButton(
                         icon: "folder",

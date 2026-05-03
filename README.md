@@ -35,9 +35,10 @@
 ## Features
 
 - **Tabbed browsing** - separate tabs for Claude Code, Codex, and Collections with count badges
-- **Search** - filter skills, plugins, and collections by name, description, or trigger
+- **Search** - filter skills, plugins, agents, and collections by name, description, metadata, and collection trigger commands
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
 - **Settings** - choose whether to show What's New, switch between system, light, and dark appearance, and control the default sort from one place
+- **Preferred editor** - choose an installed editor such as VS Code, WebStorm, Cursor, Zed, or Xcode for opening skills, agents, plugins, and global instructions
 - **Start at Login** - open SkillsBar automatically when you sign in, with a shortcut to Login Items settings if approval is needed
 - **Sort options** - sort skills by A-Z, Recently Modified, or Most Used, with the selected order persisted across restarts
 - **Collections** - create custom cross-source groups that can mix Claude Code and Codex skills in one saved view
@@ -47,7 +48,7 @@
 - **"New" indicator** - skills modified in the last 24 hours are marked with a blue badge
 - **Detail views** - inspect rich metadata for skills, agents, and Codex plugins, including trigger commands, included skills, and file listings
 - **Full content preview** - expandable section to view the raw SKILL.md body
-- **Quick actions** - open in VS Code, open in default editor, copy path, reveal in Finder, and manage items from the list
+- **Quick actions** - open items in your preferred editor, copy paths, reveal in Finder, and manage items from the list
 - **Right-click context menu** - pin, add to collections, open, copy, and delete directly from the list
 - **About & utilities** - view watched directories, library counts, and reveal watched folders directly in Finder from the About screen
 - **Global hotkey** - toggle the popover from anywhere with `Option + Shift + S`

@@ -611,51 +611,38 @@ final class SkillStore: ObservableObject {
         return true
     }
 
-    static func openInVSCode(_ skill: Skill) {
-        let url = URL(fileURLWithPath: skill.path)
-        NSWorkspace.shared.open(
-            [url],
-            withApplicationAt: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"),
-            configuration: NSWorkspace.OpenConfiguration()
-        )
+    @discardableResult
+    static func open(_ url: URL, in editor: ExternalEditor) -> Bool {
+        if let applicationURL = editor.applicationURL {
+            NSWorkspace.shared.open(
+                [url],
+                withApplicationAt: applicationURL,
+                configuration: NSWorkspace.OpenConfiguration()
+            )
+            return true
+        }
+
+        return NSWorkspace.shared.open(url)
     }
 
-    static func openInDefaultEditor(_ skill: Skill) {
-        NSWorkspace.shared.open(URL(fileURLWithPath: skill.path))
+    static func openSkill(_ skill: Skill, in editor: ExternalEditor) {
+        open(URL(fileURLWithPath: skill.path), in: editor)
     }
 
     static func revealInFinder(_ skill: Skill) {
         NSWorkspace.shared.selectFile(skill.path, inFileViewerRootedAtPath: "")
     }
 
-    static func openAgentInVSCode(_ agent: Agent) {
-        let url = URL(fileURLWithPath: agent.path)
-        NSWorkspace.shared.open(
-            [url],
-            withApplicationAt: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"),
-            configuration: NSWorkspace.OpenConfiguration()
-        )
-    }
-
-    static func openAgentInDefaultEditor(_ agent: Agent) {
-        NSWorkspace.shared.open(URL(fileURLWithPath: agent.path))
+    static func openAgent(_ agent: Agent, in editor: ExternalEditor) {
+        open(URL(fileURLWithPath: agent.path), in: editor)
     }
 
     static func revealAgentInFinder(_ agent: Agent) {
         NSWorkspace.shared.selectFile(agent.path, inFileViewerRootedAtPath: "")
     }
 
-    static func openPluginInVSCode(_ plugin: Plugin) {
-        let url = URL(fileURLWithPath: plugin.path)
-        NSWorkspace.shared.open(
-            [url],
-            withApplicationAt: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"),
-            configuration: NSWorkspace.OpenConfiguration()
-        )
-    }
-
-    static func openPluginInDefaultEditor(_ plugin: Plugin) {
-        NSWorkspace.shared.open(URL(fileURLWithPath: plugin.path))
+    static func openPlugin(_ plugin: Plugin, in editor: ExternalEditor) {
+        open(URL(fileURLWithPath: plugin.path), in: editor)
     }
 
     static func revealPluginInFinder(_ plugin: Plugin) {
@@ -685,13 +672,8 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    static func openInstructionsFileInVSCode(_ file: GlobalInstructionsFile) {
-        let url = URL(fileURLWithPath: file.path)
-        NSWorkspace.shared.open(
-            [url],
-            withApplicationAt: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"),
-            configuration: NSWorkspace.OpenConfiguration()
-        )
+    static func openInstructionsFile(_ file: GlobalInstructionsFile, in editor: ExternalEditor) {
+        open(URL(fileURLWithPath: file.path), in: editor)
     }
 
     // MARK: - Watching
