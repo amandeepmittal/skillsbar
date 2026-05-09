@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import SwiftUI
 
 private struct SkillSearchQuery {
@@ -29,6 +30,7 @@ final class SkillStore: ObservableObject {
     @Published var searchText: String = ""
     @Published var pinnedPaths: Set<String> = []
     @Published var pinnedOrder: [String] = []
+    @Published var projectPinnedSkillPaths: [String: [String]] = [:]
     @Published var sortOption: SkillSortOption = .nameAsc {
         didSet {
             guard sortOption != oldValue else { return }
@@ -49,6 +51,7 @@ final class SkillStore: ObservableObject {
 
     private static let pinnedKey = "pinnedSkillPaths"
     private static let pinnedOrderKey = "pinnedSkillOrder"
+    private static let projectPinnedSkillPathsKey = "projectPinnedSkillPaths"
     private static let sortKey = "skillSortOption"
     private static let collectionsKey = "skillCollections"
     private static let projectSkillRootsKey = "projectSkillRoots"
@@ -75,6 +78,11 @@ final class SkillStore: ObservableObject {
             pinnedOrder = Array(pinnedPaths).sorted()
         }
 
+        if let savedData = UserDefaults.standard.data(forKey: Self.projectPinnedSkillPathsKey),
+           let savedProjectPins = try? JSONDecoder().decode([String: [String]].self, from: savedData) {
+            projectPinnedSkillPaths = savedProjectPins
+        }
+
         if let savedData = UserDefaults.standard.data(forKey: Self.collectionsKey),
            let savedCollections = try? JSONDecoder().decode([SkillCollection].self, from: savedData) {
             collections = savedCollections
@@ -89,6 +97,11 @@ final class SkillStore: ObservableObject {
     private func persistPins() {
         UserDefaults.standard.set(Array(pinnedPaths), forKey: Self.pinnedKey)
         UserDefaults.standard.set(pinnedOrder, forKey: Self.pinnedOrderKey)
+    }
+
+    private func persistProjectPins() {
+        let encoded = try? JSONEncoder().encode(projectPinnedSkillPaths)
+        UserDefaults.standard.set(encoded, forKey: Self.projectPinnedSkillPathsKey)
     }
 
     private func persistCollections() {
@@ -112,22 +125,45 @@ final class SkillStore: ObservableObject {
             .map(\.element)
     }
 
+    var orderedProjectSkillRoots: [ProjectSkillRoot] {
+        projectSkillRoots.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.isPinned != rhs.element.isPinned {
+                    return lhs.element.isPinned && !rhs.element.isPinned
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     var enabledProjectSkillRoots: [ProjectSkillRoot] {
-        projectSkillRoots.filter(\.isEnabled)
+        orderedProjectSkillRoots.filter(\.isEnabled)
     }
 
     var unavailableProjectSkillRoots: [ProjectSkillRoot] {
-        projectSkillRoots.filter { projectSkillRootStatus(for: $0).isUnavailable }
+        orderedProjectSkillRoots.filter { projectSkillRootStatus(for: $0).isUnavailable }
     }
 
     // MARK: - Project Skills
 
     func addProjectSkillRoot(_ root: ProjectSkillRoot) {
-        let standardizedRoot = ProjectSkillRoot(name: root.name, path: root.path, isEnabled: true)
+        var standardizedRoot = ProjectSkillRoot(
+            name: root.name,
+            path: root.path,
+            isEnabled: true,
+            isPinned: root.isPinned,
+            trustedContentSignature: root.trustedContentSignature
+        )
+        if standardizedRoot.trustedContentSignature == nil {
+            standardizedRoot.trustedContentSignature = projectContentSignature(for: standardizedRoot)
+        }
 
         if let index = projectSkillRoots.firstIndex(where: { standardizedPath($0.path) == standardizedRoot.path }) {
             projectSkillRoots[index].name = standardizedRoot.name
             projectSkillRoots[index].isEnabled = true
+            if projectSkillRoots[index].trustedContentSignature == nil {
+                projectSkillRoots[index].trustedContentSignature = standardizedRoot.trustedContentSignature
+            }
             projectSkillRoots[index].updatedAt = Date()
         } else {
             projectSkillRoots.append(standardizedRoot)
@@ -136,6 +172,19 @@ final class SkillStore: ObservableObject {
         persistProjectSkillRoots()
         refresh()
         startWatching()
+    }
+
+    func renameProjectSkillRoot(_ root: ProjectSkillRoot, to name: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty,
+              let index = projectSkillRoots.firstIndex(where: { $0.id == root.id }) else {
+            return
+        }
+
+        projectSkillRoots[index].name = trimmedName
+        projectSkillRoots[index].updatedAt = Date()
+        persistProjectSkillRoots()
+        refresh()
     }
 
     func setProjectSkillRoot(_ root: ProjectSkillRoot, isEnabled: Bool) {
@@ -147,9 +196,69 @@ final class SkillStore: ObservableObject {
         startWatching()
     }
 
+    func togglePinProjectSkillRoot(_ root: ProjectSkillRoot) {
+        guard let index = projectSkillRoots.firstIndex(where: { $0.id == root.id }) else { return }
+        projectSkillRoots[index].isPinned.toggle()
+        projectSkillRoots[index].updatedAt = Date()
+        persistProjectSkillRoots()
+    }
+
+    func moveProjectSkillRoot(from sourceID: UUID, before targetID: UUID) {
+        guard sourceID != targetID,
+              let sourceIndex = projectSkillRoots.firstIndex(where: { $0.id == sourceID }),
+              let targetIndex = projectSkillRoots.firstIndex(where: { $0.id == targetID }) else {
+            return
+        }
+
+        let movedRoot = projectSkillRoots.remove(at: sourceIndex)
+        let adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
+        projectSkillRoots.insert(movedRoot, at: adjustedTargetIndex)
+        if let index = projectSkillRoots.firstIndex(where: { $0.id == sourceID }) {
+            projectSkillRoots[index].updatedAt = Date()
+        }
+        persistProjectSkillRoots()
+    }
+
+    func canMoveProjectSkillRoot(_ root: ProjectSkillRoot, by offset: Int) -> Bool {
+        let ordered = orderedProjectSkillRoots.filter { $0.isPinned == root.isPinned }
+        guard let sourcePosition = ordered.firstIndex(where: { $0.id == root.id }) else { return false }
+        return ordered.indices.contains(sourcePosition + offset)
+    }
+
+    func moveProjectSkillRoot(from sourceID: UUID, after targetID: UUID) {
+        guard sourceID != targetID,
+              let sourceIndex = projectSkillRoots.firstIndex(where: { $0.id == sourceID }),
+              let targetIndex = projectSkillRoots.firstIndex(where: { $0.id == targetID }) else {
+            return
+        }
+
+        let movedRoot = projectSkillRoots.remove(at: sourceIndex)
+        let adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex : targetIndex + 1
+        projectSkillRoots.insert(movedRoot, at: min(adjustedTargetIndex, projectSkillRoots.count))
+        if let index = projectSkillRoots.firstIndex(where: { $0.id == sourceID }) {
+            projectSkillRoots[index].updatedAt = Date()
+        }
+        persistProjectSkillRoots()
+    }
+
+    func moveProjectSkillRoot(_ root: ProjectSkillRoot, by offset: Int) {
+        let ordered = orderedProjectSkillRoots.filter { $0.isPinned == root.isPinned }
+        guard let sourcePosition = ordered.firstIndex(where: { $0.id == root.id }) else { return }
+        let destinationPosition = sourcePosition + offset
+        guard ordered.indices.contains(destinationPosition) else { return }
+        if offset < 0 {
+            moveProjectSkillRoot(from: root.id, before: ordered[destinationPosition].id)
+        } else {
+            moveProjectSkillRoot(from: root.id, after: ordered[destinationPosition].id)
+        }
+    }
+
     func removeProjectSkillRoot(_ root: ProjectSkillRoot) {
         projectSkillRoots.removeAll { $0.id == root.id }
         removeSkillReferences(inside: root.claudeSkillsPath)
+        removeAgentReferences(inside: root.claudeAgentsPath)
+        projectPinnedSkillPaths.removeValue(forKey: root.id.uuidString)
+        persistProjectPins()
         persistProjectSkillRoots()
         refresh()
         startWatching()
@@ -164,6 +273,123 @@ final class SkillStore: ObservableObject {
             guard let projectRootPath = skill.source.projectRootPath else { return false }
             return standardizedPath(projectRootPath) == standardizedPath(root.path)
         }
+    }
+
+    func isProjectPinned(_ skill: Skill, in root: ProjectSkillRoot) -> Bool {
+        projectPinnedSkillPaths[root.id.uuidString, default: []].contains(skill.path)
+    }
+
+    func toggleProjectPin(_ skill: Skill, in root: ProjectSkillRoot) {
+        let key = root.id.uuidString
+        var paths = projectPinnedSkillPaths[key, default: []]
+
+        if let index = paths.firstIndex(of: skill.path) {
+            paths.remove(at: index)
+        } else {
+            paths.append(skill.path)
+        }
+
+        if paths.isEmpty {
+            projectPinnedSkillPaths.removeValue(forKey: key)
+        } else {
+            projectPinnedSkillPaths[key] = paths
+        }
+
+        persistProjectPins()
+    }
+
+    func projectSortedSkills(for root: ProjectSkillRoot, skills: [Skill]? = nil) -> [Skill] {
+        let source = skills ?? projectSkills(for: root)
+        let projectPinnedOrder = projectPinnedSkillPaths[root.id.uuidString, default: []]
+        guard !projectPinnedOrder.isEmpty else { return sortSkills(source) }
+
+        let lookup = Dictionary(source.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        let pinned = projectPinnedOrder.compactMap { lookup[$0] }
+        let pinnedPaths = Set(pinned.map(\.path))
+        let remaining = sortSkills(source.filter { !pinnedPaths.contains($0.path) })
+        return pinned + remaining
+    }
+
+    func projectAgents(for root: ProjectSkillRoot) -> [Agent] {
+        lastScannedAgents.filter { agent in
+            guard let projectRootPath = agent.source.projectRootPath else { return false }
+            return standardizedPath(projectRootPath) == standardizedPath(root.path)
+        }
+    }
+
+    func projectInstructions(for root: ProjectSkillRoot) -> [ProjectInstructionFile] {
+        ProjectInstructionKind.allCases.compactMap { kind in
+            let path = (root.path as NSString).appendingPathComponent(kind.relativePath)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+                  !isDirectory.boolValue else {
+                return nil
+            }
+
+            let lastModified = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+            return ProjectInstructionFile(kind: kind, path: path, lastModified: lastModified)
+        }
+    }
+
+    func projectConflicts(for root: ProjectSkillRoot) -> [ProjectSkillConflict] {
+        projectSkills(for: root).compactMap { skill in
+            guard let summary = conflictSummary(for: skill) else { return nil }
+            return ProjectSkillConflict(skill: skill, summary: summary)
+        }
+    }
+
+    func createCollectionFromProject(_ root: ProjectSkillRoot) -> SkillCollection {
+        let skills = sortSkills(projectSkills(for: root))
+        let collection = SkillCollection(
+            name: uniqueCollectionName(from: root.name),
+            skillPaths: skills.map(\.path),
+            iconName: SkillCollectionIcon.folder.rawValue,
+            accent: .blue,
+            isPinned: true
+        )
+        collections.append(collection)
+        persistCollections()
+        return collection
+    }
+
+    @discardableResult
+    func createProjectSkillsFolder(for root: ProjectSkillRoot) -> Bool {
+        do {
+            try FileManager.default.createDirectory(
+                at: URL(fileURLWithPath: root.claudeSkillsPath),
+                withIntermediateDirectories: true
+            )
+            refresh()
+            startWatching()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func projectTrustStatus(for root: ProjectSkillRoot) -> ProjectTrustStatus {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return .unavailable
+        }
+
+        guard let currentSignature = projectContentSignature(for: root) else {
+            return .noTrackedFiles
+        }
+
+        guard let trustedSignature = root.trustedContentSignature else {
+            return .needsReview
+        }
+
+        return currentSignature == trustedSignature ? .trusted : .needsReview
+    }
+
+    func trustCurrentProjectContent(for root: ProjectSkillRoot) {
+        guard let index = projectSkillRoots.firstIndex(where: { $0.id == root.id }) else { return }
+        projectSkillRoots[index].trustedContentSignature = projectContentSignature(for: projectSkillRoots[index])
+        projectSkillRoots[index].updatedAt = Date()
+        persistProjectSkillRoots()
     }
 
     func projectSkillRootStatus(for root: ProjectSkillRoot) -> ProjectSkillRootStatus {
@@ -205,6 +431,7 @@ final class SkillStore: ObservableObject {
         var triggerMatchCount = 0
         var nameMatchCount = 0
         var descriptions: [String] = []
+        var conflictingPaths: [String] = []
         var seenPaths: Set<String> = []
 
         for candidate in lastScannedSkills where candidate.path != skill.path {
@@ -233,6 +460,7 @@ final class SkillStore: ObservableObject {
             }
 
             descriptions.append("\(candidate.source.shortScopeLabel): \(candidate.displayName) (\(matchLabel))")
+            conflictingPaths.append(candidate.path)
         }
 
         guard !descriptions.isEmpty else { return nil }
@@ -240,8 +468,19 @@ final class SkillStore: ObservableObject {
         return SkillConflictSummary(
             triggerMatchCount: triggerMatchCount,
             nameMatchCount: nameMatchCount,
-            matchingSkillDescriptions: descriptions.sorted()
+            matchingSkillDescriptions: descriptions.sorted(),
+            conflictingSkillPaths: conflictingPaths
         )
+    }
+
+    func firstConflictingSkill(for skill: Skill) -> Skill? {
+        guard let summary = conflictSummary(for: skill) else { return nil }
+        for path in summary.conflictingSkillPaths {
+            if let skill = lastScannedSkills.first(where: { $0.path == path }) {
+                return skill
+            }
+        }
+        return nil
     }
 
     func movePinnedItem(from sourcePath: String, toIndex destinationIndex: Int) {
@@ -458,6 +697,22 @@ final class SkillStore: ObservableObject {
         if didChange {
             persistCollections()
         }
+
+        var didChangeProjectPins = false
+        for key in Array(projectPinnedSkillPaths.keys) {
+            let originalCount = projectPinnedSkillPaths[key]?.count ?? 0
+            projectPinnedSkillPaths[key]?.removeAll { $0 == path }
+            if projectPinnedSkillPaths[key]?.isEmpty == true {
+                projectPinnedSkillPaths.removeValue(forKey: key)
+            }
+            if (projectPinnedSkillPaths[key]?.count ?? 0) != originalCount {
+                didChangeProjectPins = true
+            }
+        }
+
+        if didChangeProjectPins {
+            persistProjectPins()
+        }
     }
 
     private func removeSkillReferences(inside directory: String) {
@@ -487,6 +742,38 @@ final class SkillStore: ObservableObject {
 
         if didChangeCollections {
             persistCollections()
+        }
+
+        var didChangeProjectPins = false
+        for key in Array(projectPinnedSkillPaths.keys) {
+            let originalCount = projectPinnedSkillPaths[key]?.count ?? 0
+            projectPinnedSkillPaths[key]?.removeAll { path in
+                self.path(standardizedPath(path), isEqualToOrInside: standardizedDirectory)
+            }
+            if projectPinnedSkillPaths[key]?.isEmpty == true {
+                projectPinnedSkillPaths.removeValue(forKey: key)
+            }
+            if (projectPinnedSkillPaths[key]?.count ?? 0) != originalCount {
+                didChangeProjectPins = true
+            }
+        }
+
+        if didChangeProjectPins {
+            persistProjectPins()
+        }
+    }
+
+    private func removeAgentReferences(inside directory: String) {
+        let standardizedDirectory = standardizedPath(directory)
+
+        let removedPinnedPaths = pinnedPaths.filter { path in
+            self.path(standardizedPath(path), isEqualToOrInside: standardizedDirectory)
+        }
+
+        if !removedPinnedPaths.isEmpty {
+            pinnedPaths.subtract(removedPinnedPaths)
+            pinnedOrder.removeAll { removedPinnedPaths.contains($0) }
+            persistPins()
         }
     }
 
@@ -736,19 +1023,61 @@ final class SkillStore: ObservableObject {
     // MARK: - Filtering (Agents)
 
     var agentGroupsFiltered: [AgentGroup] {
-        guard !searchText.isEmpty else { return agentGroups }
-        let query = searchText.lowercased()
+        let query = parseSkillSearchQuery(searchText)
+        guard !query.isEmpty else { return agentGroups }
 
         return agentGroups.compactMap { group in
             let filteredSections = group.sections.compactMap { section in
-                let filtered = section.agents.filter { agent in
-                    agent.name.lowercased().contains(query) ||
-                    agent.description.lowercased().contains(query)
-                }
+                let filtered = section.agents.filter { agentMatchesSearch($0, query: query) }
                 return filtered.isEmpty ? nil : AgentSection(id: section.id, title: section.title, agents: filtered)
             }
             return filteredSections.isEmpty ? nil : AgentGroup(id: group.id, title: group.title, sections: filteredSections)
         }
+    }
+
+    private func agentMatchesSearch(_ agent: Agent, query: SkillSearchQuery) -> Bool {
+        if !query.sourceCategories.isEmpty {
+            let category: SkillSourceCategory
+            switch agent.source {
+            case .user:
+                category = .user
+            case .plugin:
+                category = .plugin
+            case .project:
+                category = .project
+            }
+
+            guard query.sourceCategories.contains(category) else { return false }
+        }
+
+        if !query.projectTerms.isEmpty {
+            guard let projectName = agent.source.projectName?.lowercased() else { return false }
+            let projectPath = agent.source.projectRootPath?.lowercased() ?? ""
+            guard query.projectTerms.allSatisfy({ projectName.contains($0) || projectPath.contains($0) }) else {
+                return false
+            }
+        }
+
+        if query.hasFilters {
+            guard !query.terms.isEmpty else { return true }
+            return query.terms.allSatisfy { term in
+                agentSearchFields(for: agent).contains { $0.contains(term) }
+            }
+        }
+
+        return agentSearchFields(for: agent).contains { $0.contains(query.freeText) }
+    }
+
+    private func agentSearchFields(for agent: Agent) -> [String] {
+        [
+            agent.name,
+            agent.displayName,
+            agent.description,
+            agent.identifier,
+            agent.source.sectionTitle,
+            agent.source.projectName ?? "",
+            agent.source.projectRootPath ?? "",
+        ].map(normalizedSearchValue)
     }
 
     func agentGroupsForTab() -> [AgentGroup] {
@@ -931,8 +1260,20 @@ final class SkillStore: ObservableObject {
         open(URL(fileURLWithPath: root.path), in: editor)
     }
 
+    static func openProjectInClaudeCode(_ root: ProjectSkillRoot) {
+        runTerminalCommand("claude .", in: root.path)
+    }
+
+    static func openProjectInCodex(_ root: ProjectSkillRoot) {
+        runTerminalCommand("codex .", in: root.path)
+    }
+
     static func openProjectSkillsFolder(_ root: ProjectSkillRoot, in editor: ExternalEditor) {
         open(URL(fileURLWithPath: root.claudeSkillsPath), in: editor)
+    }
+
+    static func openProjectAgentsFolder(_ root: ProjectSkillRoot, in editor: ExternalEditor) {
+        open(URL(fileURLWithPath: root.claudeAgentsPath), in: editor)
     }
 
     static func revealProjectInFinder(_ root: ProjectSkillRoot) {
@@ -941,6 +1282,31 @@ final class SkillStore: ObservableObject {
 
     static func revealProjectSkillsFolderInFinder(_ root: ProjectSkillRoot) {
         NSWorkspace.shared.selectFile(root.claudeSkillsPath, inFileViewerRootedAtPath: "")
+    }
+
+    static func revealProjectAgentsFolderInFinder(_ root: ProjectSkillRoot) {
+        NSWorkspace.shared.selectFile(root.claudeAgentsPath, inFileViewerRootedAtPath: "")
+    }
+
+    private static func runTerminalCommand(_ command: String, in directory: String) {
+        let fullCommand = "cd \(shellQuoted(directory)) && \(command)"
+        let escapedCommand = fullCommand
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e",
+            "tell application \"Terminal\" to do script \"\(escapedCommand)\"",
+            "-e",
+            "tell application \"Terminal\" to activate",
+        ]
+        try? process.run()
+    }
+
+    private static func shellQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     // MARK: - Global Instructions Files
@@ -992,6 +1358,8 @@ final class SkillStore: ObservableObject {
 
         for root in enabledProjectSkillRoots {
             targetPaths.append(standardizedPath(root.claudeSkillsPath))
+            targetPaths.append(standardizedPath(root.claudeAgentsPath))
+            targetPaths.append(contentsOf: root.instructionCandidatePaths.map(standardizedPath))
         }
 
         watchedRefreshPrefixes = targetPaths
@@ -1023,6 +1391,11 @@ final class SkillStore: ObservableObject {
             let projectPath = standardizedPath(root.path)
             let projectClaudeRoot = standardizedPath((projectPath as NSString).appendingPathComponent(".claude"))
             let projectSkillsPath = standardizedPath(root.claudeSkillsPath)
+            let projectAgentsPath = standardizedPath(root.claudeAgentsPath)
+
+            if fileManager.fileExists(atPath: projectPath) {
+                watchPaths.append(projectPath)
+            }
 
             if fileManager.fileExists(atPath: projectSkillsPath) {
                 watchPaths.append(projectSkillsPath)
@@ -1033,6 +1406,13 @@ final class SkillStore: ObservableObject {
                 watchPaths.append(projectPath)
                 watchedCreationMarkers.insert(projectClaudeRoot)
                 watchedCreationMarkers.insert(projectSkillsPath)
+            }
+
+            if fileManager.fileExists(atPath: projectAgentsPath) {
+                watchPaths.append(projectAgentsPath)
+            } else if fileManager.fileExists(atPath: projectClaudeRoot) {
+                watchPaths.append(projectClaudeRoot)
+                watchedCreationMarkers.insert(projectAgentsPath)
             }
         }
 
@@ -1095,9 +1475,67 @@ final class SkillStore: ObservableObject {
         return deduped
     }
 
+    private func projectContentSignature(for root: ProjectSkillRoot) -> String? {
+        let components = projectTrustFingerprintComponents(for: root)
+        guard !components.isEmpty else { return nil }
+        let data = components.joined(separator: "\n").data(using: .utf8) ?? Data()
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func projectTrustFingerprintComponents(for root: ProjectSkillRoot) -> [String] {
+        let fileManager = FileManager.default
+        let rootPath = standardizedPath(root.path)
+        var components: [String] = []
+
+        func appendFile(_ path: String) {
+            let standardized = standardizedPath(path)
+            guard let attributes = try? fileManager.attributesOfItem(atPath: standardized),
+                  let fileType = attributes[.type] as? FileAttributeType,
+                  fileType == .typeRegular else {
+                return
+            }
+
+            let size = attributes[.size] as? UInt64 ?? 0
+            let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            let relativePath: String
+            if standardized.hasPrefix(rootPath + "/") {
+                relativePath = String(standardized.dropFirst(rootPath.count + 1))
+            } else {
+                relativePath = standardized
+            }
+            components.append("\(relativePath)|\(size)|\(modified)")
+        }
+
+        for path in root.instructionCandidatePaths {
+            appendFile(path)
+        }
+
+        func appendRecursiveFiles(in directory: String, includeSkillFiles: Bool) {
+            guard fileManager.fileExists(atPath: directory),
+                  let enumerator = fileManager.enumerator(atPath: directory) else {
+                return
+            }
+
+            while let relativePath = enumerator.nextObject() as? String {
+                let filename = (relativePath as NSString).lastPathComponent
+                guard !filename.hasPrefix(".") else { continue }
+                if !includeSkillFiles && filename == "SKILL.md" {
+                    continue
+                }
+                appendFile((directory as NSString).appendingPathComponent(relativePath))
+            }
+        }
+
+        appendRecursiveFiles(in: root.claudeSkillsPath, includeSkillFiles: false)
+        appendRecursiveFiles(in: root.claudeAgentsPath, includeSkillFiles: true)
+
+        return components.sorted()
+    }
+
     nonisolated private static func scanContent(projectSkillRoots: [ProjectSkillRoot]) -> (skills: [Skill], agents: [Agent], plugins: [Plugin]) {
         let skills = SkillScanner().scanAll(projectSkillRoots: projectSkillRoots)
-        let agents = AgentScanner().scanAll()
+        let agents = AgentScanner().scanAll(projectSkillRoots: projectSkillRoots)
         let plugins = PluginScanner().scanInstalledPlugins()
         return (skills, agents, plugins)
     }
@@ -1156,17 +1594,15 @@ final class SkillStore: ObservableObject {
             claudeUserSkills.isEmpty ? nil : SkillSection(id: "claude-user", title: "User Skills", skills: sortSkills(claudeUserSkills)),
         ].compactMap { $0 }
 
-        let projectSections = claudeProjectSkillsByRoot
-            .sorted { lhs, rhs in
-                lhs.key.name.localizedCaseInsensitiveCompare(rhs.key.name) == .orderedAscending
-            }
-            .map { root, skills in
+        let projectSections = orderedProjectSkillRoots.compactMap { root -> SkillSection? in
+            guard let skills = claudeProjectSkillsByRoot[root], !skills.isEmpty else { return nil }
+            return
                 SkillSection(
                     id: "claude-project-\(root.id.uuidString)",
                     title: "\(root.name) Project Skills",
                     skills: sortSkills(skills)
                 )
-            }
+        }
 
         claudeSections.append(contentsOf: projectSections)
 
@@ -1196,18 +1632,38 @@ final class SkillStore: ObservableObject {
     private func buildAgentGroups(from agents: [Agent]) -> [AgentGroup] {
         var userAgents: [Agent] = []
         var pluginAgents: [Agent] = []
+        var projectAgentsByRoot: [ProjectSkillRoot: [Agent]] = [:]
 
         for agent in agents {
             switch agent.source {
             case .user: userAgents.append(agent)
             case .plugin: pluginAgents.append(agent)
+            case .project(let root): projectAgentsByRoot[root, default: []].append(agent)
             }
         }
 
-        let sections = [
+        var sections = [
             userAgents.isEmpty ? nil : AgentSection(id: "agent-user", title: "User Agents", agents: userAgents.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
-            pluginAgents.isEmpty ? nil : AgentSection(id: "agent-plugin", title: "Plugin Agents", agents: pluginAgents.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }),
         ].compactMap { $0 }
+
+        let projectSections = orderedProjectSkillRoots.compactMap { root -> AgentSection? in
+            guard let agents = projectAgentsByRoot[root], !agents.isEmpty else { return nil }
+            return AgentSection(
+                id: "agent-project-\(root.id.uuidString)",
+                title: "\(root.name) Project Agents",
+                agents: agents.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            )
+        }
+
+        sections.append(contentsOf: projectSections)
+
+        if !pluginAgents.isEmpty {
+            sections.append(AgentSection(
+                id: "agent-plugin",
+                title: "Plugin Agents",
+                agents: pluginAgents.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            ))
+        }
 
         if sections.isEmpty { return [] }
         return [AgentGroup(id: "agents", title: "Agents", sections: sections)]

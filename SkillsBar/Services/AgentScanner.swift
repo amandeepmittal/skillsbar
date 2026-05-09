@@ -4,9 +4,12 @@ struct AgentScanner {
     private let fileManager = FileManager.default
     private let home = FileManager.default.homeDirectoryForCurrentUser.path
 
-    func scanAll() -> [Agent] {
+    func scanAll(projectSkillRoots: [ProjectSkillRoot] = []) -> [Agent] {
         var agents: [Agent] = []
         agents.append(contentsOf: scanUserAgents())
+        for root in projectSkillRoots where root.isEnabled {
+            agents.append(contentsOf: scanProjectAgents(in: root))
+        }
         agents.append(contentsOf: scanPluginAgents())
         return agents
     }
@@ -14,19 +17,12 @@ struct AgentScanner {
     /// Scans ~/.claude/agents/*.md for user-created agents
     func scanUserAgents() -> [Agent] {
         let dir = (home as NSString).appendingPathComponent(".claude/agents")
-        guard fileManager.fileExists(atPath: dir) else { return [] }
-        guard let children = try? fileManager.contentsOfDirectory(atPath: dir) else { return [] }
+        return scanDirectAgentFiles(in: dir, source: .user)
+    }
 
-        var agents: [Agent] = []
-        for child in children where child.hasSuffix(".md") && !child.hasPrefix(".") {
-            let fullPath = (dir as NSString).appendingPathComponent(child)
-            var isDir: ObjCBool = false
-            guard fileManager.fileExists(atPath: fullPath, isDirectory: &isDir), !isDir.boolValue else { continue }
-            if let agent = parseAgentMD(at: fullPath, source: .user) {
-                agents.append(agent)
-            }
-        }
-        return agents
+    /// Scans an approved project's .claude/agents/*.md directory for repo-local agents.
+    func scanProjectAgents(in root: ProjectSkillRoot) -> [Agent] {
+        scanDirectAgentFiles(in: root.claudeAgentsPath, source: .project(root))
     }
 
     /// Recursively scans ~/.claude/plugins/cache/ for files matching */agents/*.md
@@ -56,6 +52,22 @@ struct AgentScanner {
     }
 
     // MARK: - Helpers
+
+    private func scanDirectAgentFiles(in dir: String, source: AgentSource) -> [Agent] {
+        guard fileManager.fileExists(atPath: dir) else { return [] }
+        guard let children = try? fileManager.contentsOfDirectory(atPath: dir) else { return [] }
+
+        var agents: [Agent] = []
+        for child in children where child.hasSuffix(".md") && !child.hasPrefix(".") {
+            let fullPath = (dir as NSString).appendingPathComponent(child)
+            var isDir: ObjCBool = false
+            guard fileManager.fileExists(atPath: fullPath, isDirectory: &isDir), !isDir.boolValue else { continue }
+            if let agent = parseAgentMD(at: fullPath, source: source) {
+                agents.append(agent)
+            }
+        }
+        return agents
+    }
 
     private func parseAgentMD(at path: String, source: AgentSource) -> Agent? {
         guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }

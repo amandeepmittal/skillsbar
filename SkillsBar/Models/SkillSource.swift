@@ -5,6 +5,8 @@ struct ProjectSkillRoot: Identifiable, Codable, Hashable {
     var name: String
     var path: String
     var isEnabled: Bool
+    var isPinned: Bool
+    var trustedContentSignature: String?
     let createdAt: Date
     var updatedAt: Date
 
@@ -13,6 +15,8 @@ struct ProjectSkillRoot: Identifiable, Codable, Hashable {
         case name
         case path
         case isEnabled
+        case isPinned
+        case trustedContentSignature
         case createdAt
         case updatedAt
     }
@@ -22,6 +26,8 @@ struct ProjectSkillRoot: Identifiable, Codable, Hashable {
         name: String? = nil,
         path: String,
         isEnabled: Bool = true,
+        isPinned: Bool = false,
+        trustedContentSignature: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -35,6 +41,8 @@ struct ProjectSkillRoot: Identifiable, Codable, Hashable {
             self.name = URL(fileURLWithPath: standardizedPath).lastPathComponent
         }
         self.isEnabled = isEnabled
+        self.isPinned = isPinned
+        self.trustedContentSignature = trustedContentSignature
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -45,12 +53,24 @@ struct ProjectSkillRoot: Identifiable, Codable, Hashable {
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Project"
         path = (try container.decode(String.self, forKey: .path) as NSString).standardizingPath
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        trustedContentSignature = try container.decodeIfPresent(String.self, forKey: .trustedContentSignature)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
     }
 
     var claudeSkillsPath: String {
         (path as NSString).appendingPathComponent(".claude/skills")
+    }
+
+    var claudeAgentsPath: String {
+        (path as NSString).appendingPathComponent(".claude/agents")
+    }
+
+    var instructionCandidatePaths: [String] {
+        ProjectInstructionKind.allCases.map { kind in
+            (path as NSString).appendingPathComponent(kind.relativePath)
+        }
     }
 }
 
@@ -83,6 +103,84 @@ enum ProjectSkillRootStatus: Equatable {
     }
 }
 
+enum ProjectInstructionKind: String, CaseIterable, Hashable {
+    case claudeRoot
+    case codexRoot
+    case codexScoped
+
+    var relativePath: String {
+        switch self {
+        case .claudeRoot:
+            return "CLAUDE.md"
+        case .codexRoot:
+            return "AGENTS.md"
+        case .codexScoped:
+            return ".codex/AGENTS.md"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .claudeRoot:
+            return "CLAUDE.md"
+        case .codexRoot:
+            return "AGENTS.md"
+        case .codexScoped:
+            return ".codex/AGENTS.md"
+        }
+    }
+
+    var sourceLabel: String {
+        switch self {
+        case .claudeRoot:
+            return "Claude Code"
+        case .codexRoot, .codexScoped:
+            return "Codex"
+        }
+    }
+}
+
+struct ProjectInstructionFile: Identifiable, Hashable {
+    let kind: ProjectInstructionKind
+    let path: String
+    let lastModified: Date?
+
+    var id: String { path }
+    var displayName: String { kind.displayName }
+    var sourceLabel: String { kind.sourceLabel }
+}
+
+struct ProjectSkillConflict: Identifiable, Hashable {
+    let skill: Skill
+    let summary: SkillConflictSummary
+
+    var id: String { skill.path }
+}
+
+enum ProjectTrustStatus: Equatable {
+    case unavailable
+    case noTrackedFiles
+    case trusted
+    case needsReview
+
+    var title: String {
+        switch self {
+        case .unavailable:
+            return "Unavailable"
+        case .noTrackedFiles:
+            return "No extra files"
+        case .trusted:
+            return "Trusted"
+        case .needsReview:
+            return "Review changes"
+        }
+    }
+
+    var needsAction: Bool {
+        self == .needsReview
+    }
+}
+
 enum SkillSourceCategory: String, CaseIterable, Hashable {
     case user
     case plugin
@@ -94,6 +192,7 @@ struct SkillConflictSummary: Hashable {
     let triggerMatchCount: Int
     let nameMatchCount: Int
     let matchingSkillDescriptions: [String]
+    let conflictingSkillPaths: [String]
 
     var totalCount: Int {
         matchingSkillDescriptions.count

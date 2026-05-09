@@ -64,7 +64,7 @@ struct SkillRowView: View {
                             .background(Color.orange.opacity(0.14))
                             .foregroundStyle(.orange)
                             .clipShape(Capsule())
-                            .help(conflictSummary.helpText)
+                            .help(conflictSummary.helpText + "\nRight-click for conflict actions.")
                     }
                     if skill.isNew {
                         Text("NEW")

@@ -155,25 +155,41 @@ struct AboutView: View {
             ("~/.codex/sessions/", homeURL.appendingPathComponent(".codex/sessions", isDirectory: true))
         ]
 
-        paths.append(contentsOf: skillStore.enabledProjectSkillRoots.map { root in
-            (
-                "\(displayProjectSkillsPath(for: root))",
-                URL(fileURLWithPath: root.claudeSkillsPath, isDirectory: true)
+        for root in skillStore.enabledProjectSkillRoots {
+            paths.append(
+                (
+                    "\(displayProjectRelativePath(root.claudeSkillsPath))",
+                    URL(fileURLWithPath: root.claudeSkillsPath, isDirectory: true)
+                )
             )
-        })
+            paths.append(
+                (
+                    "\(displayProjectRelativePath(root.claudeAgentsPath))",
+                    URL(fileURLWithPath: root.claudeAgentsPath, isDirectory: true)
+                )
+            )
+
+            for instructionPath in root.instructionCandidatePaths {
+                paths.append(
+                    (
+                        displayProjectRelativePath(instructionPath),
+                        URL(fileURLWithPath: instructionPath)
+                    )
+                )
+            }
+        }
 
         return paths
     }
 
-    private func displayProjectSkillsPath(for root: ProjectSkillRoot) -> String {
+    private func displayProjectRelativePath(_ path: String) -> String {
         let homePath = fileManager.homeDirectoryForCurrentUser.path
-        let path = root.claudeSkillsPath
 
         if path.hasPrefix(homePath + "/") {
-            return "~" + path.dropFirst(homePath.count) + "/"
+            return "~" + path.dropFirst(homePath.count)
         }
 
-        return path + "/"
+        return path
     }
 
     private var footerLinks: some View {

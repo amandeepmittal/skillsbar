@@ -252,16 +252,47 @@ struct MenuBarView: View {
                 Text("\(store.totalItemCount) items")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                ForEach(store.orderedProjectSkillRoots.filter(\.isPinned).prefix(2)) { root in
+                    Button {
+                        selectedTab = .claudeCode
+                        store.searchText = projectSearchToken(for: root)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                            Text(root.name)
+                                .font(.system(size: 11, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.10))
+                        .foregroundStyle(.blue)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Search \(root.name) project")
+                }
                 Button(action: { showProjectSkills = true }) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Image(systemName: projectHeaderIconName)
-                            .font(.system(size: 12))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Projects")
+                            .font(.system(size: 12, weight: .semibold))
                         if !store.projectSkillRoots.isEmpty {
                             Text("\(store.projectSkillRoots.count)")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(projectHeaderTint.opacity(0.16))
+                                .clipShape(Capsule())
                         }
                     }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(projectHeaderTint.opacity(0.10))
                     .foregroundStyle(projectHeaderTint)
+                    .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .help("Project Skills")
@@ -434,19 +465,19 @@ struct MenuBarView: View {
     private var searchFilterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                searchFilterChip(label: "Project", token: "source:project", color: .blue)
+                searchFilterChip(label: "Project", token: "source:project")
 
                 if selectedTab == .claudeCode || selectedTab == .collections {
-                    ForEach(store.projectSkillRoots.filter(\.isEnabled)) { root in
-                        searchFilterChip(label: root.name, token: projectSearchToken(for: root), color: .blue, secondary: true)
+                    ForEach(store.orderedProjectSkillRoots.filter(\.isEnabled)) { root in
+                        searchFilterChip(label: root.name, token: projectSearchToken(for: root))
                     }
                 }
 
-                searchFilterChip(label: "User", token: "source:user", color: .secondary)
-                searchFilterChip(label: "Plugin", token: "source:plugin", color: .secondary)
+                searchFilterChip(label: "User", token: "source:user")
+                searchFilterChip(label: "Plugin", token: "source:plugin")
 
                 if selectedTab == .codex || selectedTab == .collections {
-                    searchFilterChip(label: "Built-in", token: "source:builtin", color: .secondary)
+                    searchFilterChip(label: "Built-in", token: "source:builtin")
                 }
             }
             .padding(.horizontal, 12)
@@ -454,8 +485,10 @@ struct MenuBarView: View {
         .frame(height: 24)
     }
 
-    private func searchFilterChip(label: String, token: String, color: Color, secondary: Bool = false) -> some View {
+    private func searchFilterChip(label: String, token: String) -> some View {
         let isActive = isSearchTokenActive(token)
+        let selectedColor = Color.blue
+        let unselectedColor = Color.secondary
 
         return Button {
             toggleSearchToken(token)
@@ -465,8 +498,8 @@ struct MenuBarView: View {
                 .lineLimit(1)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(isActive ? color.opacity(0.18) : Color.secondary.opacity(secondary ? 0.07 : 0.10))
-                .foregroundStyle(isActive ? color : .secondary)
+                .background(isActive ? selectedColor.opacity(0.18) : unselectedColor.opacity(0.10))
+                .foregroundStyle(isActive ? selectedColor : unselectedColor)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -559,6 +592,13 @@ struct MenuBarView: View {
                                 ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
                                     ForEach(group.sections.filter { $0.id.hasPrefix("claude-project-") }) { section in
                                         skillSectionCard(group: group, section: section)
+                                    }
+                                }
+
+                                // Project Agents
+                                ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id.hasPrefix("agent-project-") }) { section in
+                                        agentSectionCard(group: group, section: section)
                                     }
                                 }
 
@@ -818,6 +858,20 @@ struct MenuBarView: View {
                 if index < pinnedCount - 1 {
                     Button("Move Down") {
                         store.movePinnedItem(from: skill.path, toIndex: index + 1)
+                    }
+                }
+            }
+            if store.conflictSummary(for: skill) != nil {
+                Divider()
+                if let conflictingSkill = store.firstConflictingSkill(for: skill) {
+                    Button("Reveal Conflicting Skill") {
+                        SkillStore.revealInFinder(conflictingSkill)
+                    }
+                }
+                if let projectRoot = store.projectSkillRoot(for: skill) {
+                    Button("Disable Project Version") {
+                        store.setProjectSkillRoot(projectRoot, isEnabled: false)
+                        showCopyToast("Project disabled")
                     }
                 }
             }
@@ -1228,6 +1282,20 @@ struct MenuBarView: View {
         .contextMenu {
             Button("Open Detail") {
                 selectedSkill = skill
+            }
+            if store.conflictSummary(for: skill) != nil {
+                Divider()
+                if let conflictingSkill = store.firstConflictingSkill(for: skill) {
+                    Button("Reveal Conflicting Skill") {
+                        SkillStore.revealInFinder(conflictingSkill)
+                    }
+                }
+                if let projectRoot = store.projectSkillRoot(for: skill) {
+                    Button("Disable Project Version") {
+                        store.setProjectSkillRoot(projectRoot, isEnabled: false)
+                        showCopyToast("Project disabled")
+                    }
+                }
             }
             Divider()
             if index > 0 {
@@ -1857,6 +1925,7 @@ struct MenuBarView: View {
             addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-user" })
             addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-user" })
             addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id.hasPrefix("claude-project-") })
+            addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id.hasPrefix("agent-project-") })
             if let recentSectionID = whatsNewSectionID(for: selectedTab),
                !isSectionCollapsed(recentSectionID) {
                 for item in recentItems {
