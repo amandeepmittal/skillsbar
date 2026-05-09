@@ -15,21 +15,25 @@
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/list-view.png" width="320" alt="Claude Code skills" />
+  <img src="screenshots/codex-built-in.png" width="320" alt="Codex built-in skills" />
   &nbsp;&nbsp;
-  <img src="screenshots/codex-tab.png" width="320" alt="Codex skills and plugins" />
+  <img src="screenshots/project-skills.png" width="320" alt="Project Skills screen" />
   &nbsp;&nbsp;
-  <img src="screenshots/detail-view.png" width="320" alt="Skill detail view" />
+  <img src="screenshots/project-overview.png" width="320" alt="Project overview" />
   &nbsp;&nbsp;
-  <img src="screenshots/usage-stats.png" width="320" alt="Usage stats" />
+  <img src="screenshots/project-items.png" width="320" alt="Project skills and agents" />
   &nbsp;&nbsp;
-  <img src="screenshots/about-view.png" width="320" alt="About view with watched directories" />
+  <img src="screenshots/settings-view.png" width="320" alt="Settings view" />
   &nbsp;&nbsp;
-  <img src="screenshots/collections-1.png" width="320" alt="Collections view" />
+  <img src="screenshots/collections-view.png" width="320" alt="Collections view" />
   &nbsp;&nbsp;
-  <img src="screenshots/collections-2.png" width="320" alt="Collection detail view" />
+  <img src="screenshots/plugin-detail.png" width="320" alt="Plugin detail view" />
   &nbsp;&nbsp;
-  <img src="screenshots/collections-3.png" width="320" alt="Collection detail view" />
+  <img src="screenshots/skill-detail.png" width="320" alt="Skill detail view" />
+  &nbsp;&nbsp;
+  <img src="screenshots/instructions-menu.png" width="320" alt="Global instructions menu" />
+  &nbsp;&nbsp;
+  <img src="screenshots/skill-context-menu.png" width="320" alt="Skill context menu" />
 </p>
 
 ## Features
