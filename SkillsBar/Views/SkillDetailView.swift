@@ -5,6 +5,7 @@ struct SkillDetailView: View {
     let isPinned: Bool
     var usageStat: SkillUsageStat? = nil
     var conflictSummary: SkillConflictSummary? = nil
+    var validationSummary: SkillValidationSummary? = nil
     let collections: [SkillCollection]
     let skillCollections: [SkillCollection]
     let onBack: () -> Void
@@ -140,6 +141,10 @@ struct SkillDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(cardBg)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    if let validationSummary {
+                        validationPreviewCard(validationSummary)
+                    }
 
                     // Description card
                     VStack(alignment: .leading, spacing: 8) {
@@ -464,6 +469,83 @@ struct SkillDetailView: View {
         .background(collection.accent.swiftUIColor.opacity(0.12))
         .foregroundStyle(collection.accent.swiftUIColor)
         .clipShape(Capsule())
+    }
+
+    private func validationPreviewCard(_ summary: SkillValidationSummary) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("VALIDATION PREVIEW")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+                Spacer()
+                badge(summary.statusTitle, color: validationColor(summary))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                validationRow(
+                    title: "Frontmatter",
+                    value: summary.hasFrontmatter ? "Valid" : "Missing or invalid",
+                    isReady: summary.hasFrontmatter
+                )
+                validationRow(title: "Name", value: summary.hasName ? "Present" : "Missing", isReady: summary.hasName)
+                validationRow(title: "Description", value: summary.hasDescription ? "Present" : "Missing", isReady: summary.hasDescription)
+                validationRow(title: "Trigger", value: skill.triggerCommand, isReady: true)
+            }
+
+            if !summary.recommendedMissingFields.isEmpty {
+                Text("Recommended fields to add: \(summary.recommendedMissingFields.joined(separator: ", ")).")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Preview")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(summary.previewTitle)
+                    .font(.system(size: 13, weight: .medium))
+                Text(summary.previewDescription)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Text(summary.exampleInvocation)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func validationRow(title: String, value: String, isReady: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isReady ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(isReady ? .green : .orange)
+                .frame(width: 16)
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 88, alignment: .leading)
+            Text(value)
+                .font(.system(size: 12))
+                .lineLimit(1)
+            Spacer()
+        }
+    }
+
+    private func validationColor(_ summary: SkillValidationSummary) -> Color {
+        if !summary.hasFrontmatter { return .red }
+        if !summary.recommendedMissingFields.isEmpty { return .orange }
+        return .green
     }
 
     private func copyPath() {

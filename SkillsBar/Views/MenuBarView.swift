@@ -22,6 +22,7 @@ struct MenuBarView: View {
     @State private var showUsageStats = false
     @State private var showProjectSkills = false
     @State private var showInstructionsPopover = false
+    @State private var activeToolScreen: SkillsBarToolScreen?
     @State private var collapsedSections: Set<String> = {
         let defaults = UserDefaults.standard
         let saved = Set(defaults.stringArray(forKey: "collapsedSections") ?? [])
@@ -118,7 +119,9 @@ struct MenuBarView: View {
 
     var body: some View {
         Group {
-            if showSettings {
+            if let activeToolScreen {
+                toolScreen(activeToolScreen)
+            } else if showSettings {
                 SettingsView(skillStore: store, onBack: { showSettings = false })
             } else if showProjectSkills {
                 ProjectSkillsView(skillStore: store, onBack: { showProjectSkills = false })
@@ -127,6 +130,7 @@ struct MenuBarView: View {
             } else if showUsageStats {
                 UsageStatsView(
                     usageTracker: usageTracker,
+                    installedSkills: store.allSkills,
                     installedSkillIdentifiers: installedSkillIdentifiers,
                     projectUsageContextsByIdentifier: projectUsageContextsByIdentifier,
                     onBack: { showUsageStats = false }
@@ -168,6 +172,7 @@ struct MenuBarView: View {
                     isPinned: store.isPinned(skill),
                     usageStat: usageTracker.stat(for: skill),
                     conflictSummary: store.conflictSummary(for: skill),
+                    validationSummary: store.validationSummary(for: skill),
                     collections: store.orderedCollections,
                     skillCollections: store.collections(for: skill),
                     onBack: { selectedSkill = nil },
@@ -252,6 +257,23 @@ struct MenuBarView: View {
                 Text("\(store.totalItemCount) items")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                Button {
+                    openToolScreen(.commandPalette)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "command")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("K")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.10))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Command Palette")
                 ForEach(store.orderedProjectSkillRoots.filter(\.isPinned).prefix(2)) { root in
                     Button {
                         selectedTab = .claudeCode
@@ -273,7 +295,7 @@ struct MenuBarView: View {
                     .buttonStyle(.plain)
                     .help("Search \(root.name) project")
                 }
-                Button(action: { showProjectSkills = true }) {
+                Button(action: { openToolScreen(.projects) }) {
                     HStack(spacing: 6) {
                         Image(systemName: projectHeaderIconName)
                             .font(.system(size: 12, weight: .semibold))
@@ -345,39 +367,74 @@ struct MenuBarView: View {
 
             // Footer card
             HStack {
-                Button(action: refreshAll) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12))
-                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                            .animation(
-                                isRefreshing
-                                    ? .linear(duration: 1).repeatForever(autoreverses: false)
-                                    : .default,
-                                value: isRefreshing
-                            )
-                        Text("Refresh")
-                            .font(.system(size: 12))
+                HStack(spacing: 16) {
+                    Button(action: refreshAll) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 12))
+                                .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                                .animation(
+                                    isRefreshing
+                                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                        : .default,
+                                    value: isRefreshing
+                                )
+                            Text("Refresh")
+                                .font(.system(size: 12))
+                                .lineLimit(1)
+                        }
+                        .fixedSize()
                     }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .disabled(isRefreshing)
-                .help(isRefreshing ? "Refreshing skills & stats" : "Refresh skills & stats")
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .disabled(isRefreshing)
+                    .help(isRefreshing ? "Refreshing skills & stats" : "Refresh skills & stats")
 
-                Spacer()
-
-                Button(action: { showUsageStats = true }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chart.bar")
-                            .font(.system(size: 12))
-                        Text("Stats")
-                            .font(.system(size: 12))
+                    Menu {
+                        ForEach([
+                            SkillsBarToolScreen.commandPalette,
+                            .health,
+                            .smartCollections,
+                            .conflicts,
+                            .importExport,
+                            .instructions,
+                            .plugins,
+                        ]) { screen in
+                            Button {
+                                openToolScreen(screen)
+                            } label: {
+                                Label(screen.title, systemImage: screen.iconName)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 12))
+                            Text("Tools")
+                                .font(.system(size: 12))
+                        }
+                        .fixedSize()
                     }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .foregroundStyle(.secondary)
+                    .help("Skill tools")
+
+                    Button(action: { openToolScreen(.stats) }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chart.bar")
+                                .font(.system(size: 12))
+                            Text("Stats")
+                                .font(.system(size: 12))
+                                .lineLimit(1)
+                        }
+                        .fixedSize()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Usage statistics")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Usage statistics")
+                .fixedSize()
 
                 Spacer()
 
@@ -391,13 +448,13 @@ struct MenuBarView: View {
 
                 Spacer()
 
-                Button(action: { showInstructionsPopover.toggle() }) {
+                Button(action: { openToolScreen(.instructions) }) {
                     Image(systemName: "doc.text")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help("Open global AI instructions in \(preferredEditor.shortTitle)")
+                .help("Instructions Hub")
                 .popover(isPresented: $showInstructionsPopover, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(SkillStore.GlobalInstructionsFile.allCases) { file in
@@ -419,7 +476,7 @@ struct MenuBarView: View {
                     .frame(minWidth: 200)
                 }
 
-                Button(action: { showSettings = true }) {
+                Button(action: { openToolScreen(.settings) }) {
                     Image(systemName: "gearshape")
                         .font(.system(size: 12))
                 }
@@ -450,6 +507,88 @@ struct MenuBarView: View {
             .padding(.bottom, 8)
         }
         .frame(width: SkillsBarLayout.windowWidth)
+    }
+
+    @ViewBuilder
+    private func toolScreen(_ screen: SkillsBarToolScreen) -> some View {
+        switch screen {
+        case .commandPalette:
+            CommandPaletteView(
+                store: store,
+                usageTracker: usageTracker,
+                onBack: { activeToolScreen = nil },
+                onSelectSkill: selectSkillFromTool,
+                onSelectAgent: selectAgentFromTool,
+                onSelectPlugin: selectPluginFromTool,
+                onSelectCollection: selectCollectionFromTool,
+                onSelectProject: selectProjectFromTool,
+                onOpenScreen: openToolScreen,
+                onCopyTrigger: { skill in
+                    copyToPasteboard(skill.triggerCommand, feedback: "Copied command")
+                },
+                onOpenSkillInEditor: { skill in
+                    SkillStore.openSkill(skill, in: preferredEditor)
+                },
+                onRefresh: refreshAll
+            )
+        case .health:
+            SkillHealthView(
+                store: store,
+                usageTracker: usageTracker,
+                onBack: { activeToolScreen = nil },
+                onSelectSkillPath: selectSkillPathFromTool,
+                onRefresh: refreshAll,
+                onToast: showCopyToast
+            )
+        case .smartCollections:
+            SmartCollectionsView(
+                store: store,
+                usageTracker: usageTracker,
+                onBack: { activeToolScreen = nil },
+                onSelectSkill: selectSkillFromTool,
+                onToast: showCopyToast
+            )
+        case .conflicts:
+            ConflictCenterView(
+                store: store,
+                onBack: { activeToolScreen = nil },
+                onSelectSkill: selectSkillFromTool,
+                onCopyTrigger: { skill in
+                    copyToPasteboard(skill.triggerCommand, feedback: "Copied command")
+                }
+            )
+        case .importExport:
+            ImportExportView(
+                store: store,
+                onBack: { activeToolScreen = nil },
+                onToast: showCopyToast
+            )
+        case .instructions:
+            InstructionsHubView(
+                store: store,
+                preferredEditor: preferredEditor,
+                onBack: { activeToolScreen = nil }
+            )
+        case .plugins:
+            PluginAwarenessView(
+                store: store,
+                preferredEditor: preferredEditor,
+                onBack: { activeToolScreen = nil },
+                onSelectPlugin: selectPluginFromTool
+            )
+        case .stats:
+            UsageStatsView(
+                usageTracker: usageTracker,
+                installedSkills: store.allSkills,
+                installedSkillIdentifiers: installedSkillIdentifiers,
+                projectUsageContextsByIdentifier: projectUsageContextsByIdentifier,
+                onBack: { activeToolScreen = nil }
+            )
+        case .settings:
+            SettingsView(skillStore: store, onBack: { activeToolScreen = nil })
+        case .projects:
+            ProjectSkillsView(skillStore: store, onBack: { activeToolScreen = nil })
+        }
     }
 
     private var projectHeaderIconName: String {
@@ -1871,6 +2010,7 @@ struct MenuBarView: View {
         selectedSkill == nil &&
             selectedAgent == nil &&
             selectedPlugin == nil &&
+            activeToolScreen == nil &&
             !showSettings &&
             !showProjectSkills &&
             !showAbout &&
@@ -1978,9 +2118,15 @@ struct MenuBarView: View {
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifiers.contains(.command), Int(event.keyCode) == 40 {
+            openToolScreen(.commandPalette)
+            return nil
+        }
+
         switch Int(event.keyCode) {
         case 123: // Left arrow
-            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) else {
+            guard modifiers.contains(.command) else {
                 return event
             }
             return handleBackNavigation() ? nil : event
@@ -2028,6 +2174,10 @@ struct MenuBarView: View {
     }
 
     private func handleBackNavigation() -> Bool {
+        if activeToolScreen != nil {
+            activeToolScreen = nil
+            return true
+        }
         if selectedSkill != nil {
             selectedSkill = nil
             return true
@@ -2192,6 +2342,65 @@ struct MenuBarView: View {
 
         copyToastDismissWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.1, execute: workItem)
+    }
+
+    private func openToolScreen(_ screen: SkillsBarToolScreen) {
+        selectedSkill = nil
+        selectedAgent = nil
+        selectedPlugin = nil
+        showSettings = false
+        showProjectSkills = false
+        showAbout = false
+        showUsageStats = false
+        showInstructionsPopover = false
+        activeToolScreen = screen
+    }
+
+    private func selectSkillFromTool(_ skill: Skill) {
+        activeToolScreen = nil
+        selectedAgent = nil
+        selectedPlugin = nil
+        selectedSkill = skill
+    }
+
+    private func selectAgentFromTool(_ agent: Agent) {
+        activeToolScreen = nil
+        selectedSkill = nil
+        selectedPlugin = nil
+        selectedAgent = agent
+    }
+
+    private func selectPluginFromTool(_ plugin: Plugin) {
+        activeToolScreen = nil
+        selectedSkill = nil
+        selectedAgent = nil
+        selectedPlugin = plugin
+    }
+
+    private func selectCollectionFromTool(_ collection: SkillCollection) {
+        activeToolScreen = nil
+        selectedSkill = nil
+        selectedAgent = nil
+        selectedPlugin = nil
+        selectedTab = .collections
+        store.searchText = collection.name
+    }
+
+    private func selectProjectFromTool(_ project: ProjectSkillRoot) {
+        activeToolScreen = .projects
+        selectedSkill = nil
+        selectedAgent = nil
+        selectedPlugin = nil
+        selectedTab = .claudeCode
+        store.searchText = projectSearchToken(for: project)
+    }
+
+    private func selectSkillPathFromTool(_ path: String) {
+        if let skill = store.skill(forPath: path) {
+            selectSkillFromTool(skill)
+        } else {
+            NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+        }
     }
 
     @discardableResult

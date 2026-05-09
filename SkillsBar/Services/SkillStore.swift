@@ -1126,6 +1126,454 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    // MARK: - Feature Surfaces
+
+    var allSkills: [Skill] {
+        sortSkills(lastScannedSkills)
+    }
+
+    var allAgents: [Agent] {
+        lastScannedAgents.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    func skillHealthIssues(usageTracker: UsageTracker? = nil) -> [SkillHealthIssue] {
+        var issues: [SkillHealthIssue] = []
+        let allPaths = Set(lastScannedSkills.map(\.path) + lastScannedAgents.map(\.path))
+
+        for skill in lastScannedSkills {
+            let content = try? String(contentsOfFile: skill.path, encoding: .utf8)
+            if content == nil || content.flatMap({ FrontmatterParser.parse(content: $0) }) == nil {
+                issues.append(
+                    SkillHealthIssue(
+                        id: "invalid-frontmatter-\(skill.path)",
+                        category: .invalidFrontmatter,
+                        severity: .critical,
+                        title: skill.displayName,
+                        detail: "SKILL.md is missing valid YAML frontmatter.",
+                        path: skill.path,
+                        skillPath: skill.path,
+                        collectionID: nil
+                    )
+                )
+            }
+
+            if skill.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                issues.append(
+                    SkillHealthIssue(
+                        id: "missing-description-\(skill.path)",
+                        category: .missingDescription,
+                        severity: .warning,
+                        title: skill.displayName,
+                        detail: "Add a description so the skill is easier to scan and validate.",
+                        path: skill.path,
+                        skillPath: skill.path,
+                        collectionID: nil
+                    )
+                )
+            }
+        }
+
+        for group in conflictGroups().filter({ $0.kind == .trigger }) {
+            issues.append(
+                SkillHealthIssue(
+                    id: "duplicate-trigger-\(group.value.lowercased())",
+                    category: .duplicateTrigger,
+                    severity: .warning,
+                    title: group.value,
+                    detail: "\(group.skills.count) skills use this trigger.",
+                    path: group.skills.first?.path,
+                    skillPath: group.skills.first?.path,
+                    collectionID: nil
+                )
+            )
+        }
+
+        let skillLookup = Set(lastScannedSkills.map(\.path))
+        for collection in collections {
+            for path in collection.skillPaths where !skillLookup.contains(path) {
+                issues.append(
+                    SkillHealthIssue(
+                        id: "missing-collection-\(collection.id.uuidString)-\(path)",
+                        category: .missingCollectionPath,
+                        severity: .warning,
+                        title: collection.name,
+                        detail: "Saved skill path no longer resolves: \(path)",
+                        path: path,
+                        skillPath: nil,
+                        collectionID: collection.id
+                    )
+                )
+            }
+        }
+
+        for folder in watchedHealthFolders() {
+            guard FileManager.default.fileExists(atPath: folder.path) else { continue }
+            if (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) == nil {
+                issues.append(
+                    SkillHealthIssue(
+                        id: "unreadable-folder-\(folder.path)",
+                        category: .unreadableFolder,
+                        severity: .critical,
+                        title: folder.title,
+                        detail: "SkillsBar cannot read this folder.",
+                        path: folder.path,
+                        skillPath: nil,
+                        collectionID: nil
+                    )
+                )
+            }
+        }
+
+        for path in pinnedPaths where !allPaths.contains(path) {
+            issues.append(
+                SkillHealthIssue(
+                    id: "stale-pin-\(path)",
+                    category: .stalePinnedItem,
+                    severity: .warning,
+                    title: URL(fileURLWithPath: path).lastPathComponent,
+                    detail: "This pinned path is no longer in the latest scan.",
+                    path: path,
+                    skillPath: nil,
+                    collectionID: nil
+                )
+            )
+        }
+
+        return issues.sorted { lhs, rhs in
+            if lhs.category.title != rhs.category.title {
+                return lhs.category.title < rhs.category.title
+            }
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
+    }
+
+    func clearStalePinnedItems() -> Int {
+        let availablePaths = Set(lastScannedSkills.map(\.path) + lastScannedAgents.map(\.path))
+        let stale = pinnedPaths.subtracting(availablePaths)
+        guard !stale.isEmpty else { return 0 }
+        pinnedPaths.subtract(stale)
+        pinnedOrder.removeAll { stale.contains($0) }
+        persistPins()
+        return stale.count
+    }
+
+    @discardableResult
+    func clearAllMissingCollectionPaths() -> Int {
+        guard lastRefreshDate != nil else { return 0 }
+        let availablePaths = Set(lastScannedSkills.map(\.path))
+        var removedCount = 0
+
+        for index in collections.indices {
+            let original = collections[index].skillPaths
+            let resolved = original.filter { availablePaths.contains($0) }
+            removedCount += original.count - resolved.count
+            if original != resolved {
+                collections[index].skillPaths = resolved
+                collections[index].updatedAt = Date()
+            }
+        }
+
+        if removedCount > 0 {
+            persistCollections()
+        }
+
+        return removedCount
+    }
+
+    func conflictGroups() -> [SkillConflictGroup] {
+        let triggerGroups = Dictionary(grouping: lastScannedSkills) { skill in
+            normalizedSearchValue(skill.triggerCommand)
+        }
+        let nameGroups = Dictionary(grouping: lastScannedSkills) { skill in
+            normalizedSearchValue(skill.displayName)
+        }
+
+        let triggers = triggerGroups.compactMap { key, skills -> SkillConflictGroup? in
+            guard !key.isEmpty, skills.count > 1 else { return nil }
+            return SkillConflictGroup(kind: .trigger, value: skills[0].triggerCommand, skills: sortSkills(skills))
+        }
+
+        let names = nameGroups.compactMap { key, skills -> SkillConflictGroup? in
+            guard !key.isEmpty, skills.count > 1 else { return nil }
+            return SkillConflictGroup(kind: .name, value: skills[0].displayName, skills: sortSkills(skills))
+        }
+
+        return (triggers + names).sorted { lhs, rhs in
+            if lhs.kind.title != rhs.kind.title {
+                return lhs.kind.title < rhs.kind.title
+            }
+            return lhs.value.localizedCaseInsensitiveCompare(rhs.value) == .orderedAscending
+        }
+    }
+
+    func smartCollection(for kind: SmartCollectionKind, usageTracker: UsageTracker) -> ResolvedSmartCollection {
+        let skills: [Skill]
+        switch kind {
+        case .recentlyModified:
+            let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+            skills = lastScannedSkills
+                .filter { ($0.lastModified ?? .distantPast) >= cutoff }
+                .sorted { ($0.lastModified ?? .distantPast) > ($1.lastModified ?? .distantPast) }
+        case .mostUsed:
+            skills = lastScannedSkills
+                .filter { usageTracker.stat(for: $0) != nil }
+                .sorted {
+                    let lhs = usageTracker.stat(for: $0)?.totalCount ?? 0
+                    let rhs = usageTracker.stat(for: $1)?.totalCount ?? 0
+                    if lhs != rhs { return lhs > rhs }
+                    return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+                }
+        case .projectSkills:
+            skills = sortSkills(lastScannedSkills.filter(\.source.isProjectSkill))
+        case .conflicts:
+            var seen: Set<String> = []
+            skills = conflictGroups()
+                .flatMap(\.skills)
+                .filter { seen.insert($0.path).inserted }
+        case .unused:
+            skills = sortSkills(lastScannedSkills.filter { usageTracker.stat(for: $0) == nil })
+        case .claudeOnly:
+            skills = sortSkills(lastScannedSkills.filter {
+                if case .claudeCode = $0.source { return true }
+                return false
+            })
+        case .codexPlugins:
+            skills = sortSkills(lastScannedSkills.filter {
+                if case .codexCLI(.plugin) = $0.source { return true }
+                return false
+            })
+        }
+
+        return ResolvedSmartCollection(kind: kind, skills: skills)
+    }
+
+    @discardableResult
+    func saveSmartCollectionCopy(_ kind: SmartCollectionKind, usageTracker: UsageTracker) -> SkillCollection {
+        let resolved = smartCollection(for: kind, usageTracker: usageTracker)
+        let collection = SkillCollection(
+            name: uniqueCollectionName(from: kind.title),
+            skillPaths: resolved.skills.map(\.path),
+            iconName: kind.iconName,
+            accent: smartCollectionAccent(for: kind)
+        )
+        collections.append(collection)
+        persistCollections()
+        return collection
+    }
+
+    func validationSummary(for skill: Skill) -> SkillValidationSummary {
+        let content = try? String(contentsOfFile: skill.path, encoding: .utf8)
+        let parsed = content.flatMap { FrontmatterParser.parse(content: $0) }
+        let hasFrontmatter = parsed != nil
+        let hasName = !(parsed?.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasDescription = !(parsed?.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        var missing: [String] = []
+
+        if !hasName {
+            missing.append("name")
+        }
+        if !hasDescription {
+            missing.append("description")
+        }
+
+        return SkillValidationSummary(
+            hasFrontmatter: hasFrontmatter,
+            hasName: hasName,
+            hasDescription: hasDescription,
+            recommendedMissingFields: missing,
+            exampleInvocation: validationExampleInvocation(for: skill),
+            previewTitle: skill.displayName,
+            previewDescription: skill.shortDescription.isEmpty ? "No description available." : skill.shortDescription
+        )
+    }
+
+    func instructionHubItems() -> [InstructionHubItem] {
+        let globalItems = GlobalInstructionsFile.allCases.map { file in
+            instructionHubItem(
+                displayName: file.displayName,
+                sourceLabel: file == .claudeCode ? "Claude Code" : "Codex",
+                scope: .global,
+                projectName: nil,
+                path: file.path
+            )
+        }
+
+        let projectItems = orderedProjectSkillRoots.flatMap { root in
+            ProjectInstructionKind.allCases.map { kind in
+                instructionHubItem(
+                    displayName: kind.displayName,
+                    sourceLabel: kind.sourceLabel,
+                    scope: .project,
+                    projectName: root.name,
+                    path: (root.path as NSString).appendingPathComponent(kind.relativePath)
+                )
+            }
+        }
+
+        return globalItems + projectItems
+    }
+
+    func pluginAwarenessItems() -> [PluginAwarenessItem] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return plugins
+            .map { plugin in
+                PluginAwarenessItem(
+                    plugin: plugin,
+                    skillCount: skills(for: plugin).count,
+                    changedRecently: (plugin.lastModified ?? .distantPast) >= cutoff
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.changedRecently != rhs.changedRecently {
+                    return lhs.changedRecently && !rhs.changedRecently
+                }
+                let lhsDate = lhs.plugin.lastModified ?? .distantPast
+                let rhsDate = rhs.plugin.lastModified ?? .distantPast
+                if lhsDate != rhsDate { return lhsDate > rhsDate }
+                return lhs.plugin.displayName.localizedCaseInsensitiveCompare(rhs.plugin.displayName) == .orderedAscending
+            }
+    }
+
+    func exportSnapshot() -> SkillLibraryExportSnapshot {
+        let defaults = UserDefaults.standard
+        return SkillLibraryExportSnapshot(
+            schemaVersion: 1,
+            exportedAt: Date(),
+            collections: collections,
+            pinnedPaths: Array(pinnedPaths).sorted(),
+            pinnedOrder: pinnedOrder,
+            projectSkillRoots: projectSkillRoots,
+            projectPinnedSkillPaths: projectPinnedSkillPaths,
+            appPreferences: SkillLibraryAppPreferences(
+                sortOptionRaw: sortOption.rawValue,
+                selectedTabRaw: defaults.string(forKey: "selectedTab"),
+                preferredAppearanceRaw: defaults.string(forKey: AppPreferenceKey.preferredAppearance),
+                showsWhatsNewSection: defaults.object(forKey: AppPreferenceKey.showsWhatsNewSection) as? Bool,
+                preferredEditorRaw: defaults.string(forKey: AppPreferenceKey.preferredEditor)
+            )
+        )
+    }
+
+    func importPreview(from data: Data) throws -> SkillLibraryImportPreview {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let snapshot = try decoder.decode(SkillLibraryExportSnapshot.self, from: data)
+        return SkillLibraryImportPreview(snapshot: snapshot)
+    }
+
+    func applyImport(_ preview: SkillLibraryImportPreview) {
+        let snapshot = preview.snapshot
+        collections = snapshot.collections
+        pinnedPaths = Set(snapshot.pinnedPaths)
+        pinnedOrder = snapshot.pinnedOrder.filter { pinnedPaths.contains($0) }
+        let orderedSet = Set(pinnedOrder)
+        for path in pinnedPaths where !orderedSet.contains(path) {
+            pinnedOrder.append(path)
+        }
+        projectSkillRoots = snapshot.projectSkillRoots
+        projectPinnedSkillPaths = snapshot.projectPinnedSkillPaths
+
+        persistCollections()
+        persistPins()
+        persistProjectPins()
+        persistProjectSkillRoots()
+        applyPreferences(snapshot.appPreferences)
+        refresh()
+        startWatching()
+    }
+
+    private func applyPreferences(_ preferences: SkillLibraryAppPreferences) {
+        let defaults = UserDefaults.standard
+        if let sortOptionRaw = preferences.sortOptionRaw,
+           let sortOption = SkillSortOption(rawValue: sortOptionRaw) {
+            self.sortOption = sortOption
+        }
+        if let selectedTabRaw = preferences.selectedTabRaw {
+            defaults.set(selectedTabRaw, forKey: "selectedTab")
+        }
+        if let preferredAppearanceRaw = preferences.preferredAppearanceRaw {
+            defaults.set(preferredAppearanceRaw, forKey: AppPreferenceKey.preferredAppearance)
+        }
+        if let showsWhatsNewSection = preferences.showsWhatsNewSection {
+            defaults.set(showsWhatsNewSection, forKey: AppPreferenceKey.showsWhatsNewSection)
+        }
+        if let preferredEditorRaw = preferences.preferredEditorRaw {
+            defaults.set(preferredEditorRaw, forKey: AppPreferenceKey.preferredEditor)
+        }
+    }
+
+    private func watchedHealthFolders() -> [(title: String, path: String)] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        var folders = [
+            ("Claude user skills", (home as NSString).appendingPathComponent(".claude/skills")),
+            ("Claude plugins", (home as NSString).appendingPathComponent(".claude/plugins/cache")),
+            ("Claude agents", (home as NSString).appendingPathComponent(".claude/agents")),
+            ("Codex user skills", (home as NSString).appendingPathComponent(".codex/skills")),
+            ("Codex plugins", (home as NSString).appendingPathComponent(".codex/plugins/cache")),
+        ]
+
+        for root in orderedProjectSkillRoots {
+            folders.append(("\(root.name) project skills", root.claudeSkillsPath))
+            folders.append(("\(root.name) project agents", root.claudeAgentsPath))
+        }
+
+        return folders
+    }
+
+    private func smartCollectionAccent(for kind: SmartCollectionKind) -> SkillCollectionAccent {
+        switch kind {
+        case .recentlyModified:
+            return .teal
+        case .mostUsed:
+            return .blue
+        case .projectSkills:
+            return .green
+        case .conflicts:
+            return .orange
+        case .unused:
+            return .gray
+        case .claudeOnly:
+            return .pink
+        case .codexPlugins:
+            return .purple
+        }
+    }
+
+    private func validationExampleInvocation(for skill: Skill) -> String {
+        switch skill.source {
+        case .claudeCode:
+            return "Claude Code: \(skill.triggerCommand)"
+        case .codexCLI:
+            return "Codex: \(skill.triggerCommand)"
+        }
+    }
+
+    private func instructionHubItem(
+        displayName: String,
+        sourceLabel: String,
+        scope: InstructionHubScope,
+        projectName: String?,
+        path: String
+    ) -> InstructionHubItem {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && !isDirectory.boolValue
+        let isReadable = exists && FileManager.default.isReadableFile(atPath: path)
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        let size = attributes?[.size] as? UInt64 ?? 0
+        return InstructionHubItem(
+            id: path,
+            displayName: displayName,
+            sourceLabel: sourceLabel,
+            scope: scope,
+            projectName: projectName,
+            path: path,
+            exists: exists,
+            lastModified: attributes?[.modificationDate] as? Date,
+            isReadable: isReadable,
+            isEmpty: exists && size == 0
+        )
+    }
+
     enum SkillTab: String, CaseIterable, Identifiable {
         case claudeCode = "Claude Code"
         case codex = "Codex"

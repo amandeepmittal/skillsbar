@@ -42,6 +42,8 @@
 		A10001033 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002034; };
 		A10001034 /* LoginItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002035; };
 		A10001035 /* ProjectSkillsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002036; };
+		A10001036 /* SkillLibraryFeatureModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002037; };
+		A10001037 /* SkillLibraryFeatureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10002038; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,6 +84,8 @@
 		A10002034 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A10002035 /* LoginItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemController.swift; sourceTree = "<group>"; };
 		A10002036 /* ProjectSkillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSkillsView.swift; sourceTree = "<group>"; };
+		A10002037 /* SkillLibraryFeatureModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillLibraryFeatureModels.swift; sourceTree = "<group>"; };
+		A10002038 /* SkillLibraryFeatureViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillLibraryFeatureViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -132,6 +136,7 @@
 				A10002027 /* SkillCollection.swift */,
 				A10002033 /* AppAppearance.swift */,
 				A10002029 /* Plugin.swift */,
+				A10002037 /* SkillLibraryFeatureModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -166,6 +171,7 @@
 				A10002025 /* UsageStatsView.swift */,
 				A10002031 /* PluginRowView.swift */,
 				A10002032 /* PluginDetailView.swift */,
+				A10002038 /* SkillLibraryFeatureViews.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -281,6 +287,8 @@
 				A10001033 /* SettingsView.swift in Sources */,
 				A10001034 /* LoginItemController.swift in Sources */,
 				A10001035 /* ProjectSkillsView.swift in Sources */,
+				A10001036 /* SkillLibraryFeatureModels.swift in Sources */,
+				A10001037 /* SkillLibraryFeatureViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

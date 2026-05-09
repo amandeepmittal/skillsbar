@@ -49,6 +49,7 @@ private enum UsageAvailabilityStatus: Equatable {
 
 struct UsageStatsView: View {
     @ObservedObject var usageTracker: UsageTracker
+    let installedSkills: [Skill]
     let installedSkillIdentifiers: Set<String>
     let projectUsageContextsByIdentifier: [String: [ProjectSkillUsageContext]]
     let onBack: () -> Void
@@ -100,6 +101,7 @@ struct UsageStatsView: View {
                 ScrollView {
                     VStack(spacing: 10) {
                         summaryCard
+                        usageTrendsCard
                         insightsCard
                         rankedListCard
                     }
@@ -178,6 +180,129 @@ struct UsageStatsView: View {
         if days < 7 { return "\(days)d" }
         if days < 30 { return "\(days / 7)w" }
         return "\(days / 30)mo"
+    }
+
+    // MARK: - Usage Trends
+
+    private var usageTrendsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("TRENDS")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.5)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(minimum: 84), spacing: 8),
+                    GridItem(.flexible(minimum: 84), spacing: 8),
+                    GridItem(.flexible(minimum: 84), spacing: 8),
+                ],
+                spacing: 8
+            ) {
+                trendMetric(value: "\(usageCount(days: 7))", label: "This Week")
+                trendMetric(value: "\(usageCount(days: 30))", label: "This Month")
+                trendMetric(value: "\(recentlyUsedStats.count)", label: "Recent")
+                trendMetric(value: "\(neverUsedSkills.count)", label: "Never Used")
+                trendMetric(value: "\(usageTracker.staleSkills.count)", label: "Stale")
+                trendMetric(value: "\(projectConfirmedUsageCount)", label: "Project Uses")
+                trendMetric(value: "\(installedButNeverUsedCount)", label: "Installed Unused")
+            }
+
+            if !recentlyUsedStats.isEmpty {
+                trendRow(
+                    icon: "clock.fill",
+                    color: .blue,
+                    label: "Recently used",
+                    value: recentlyUsedStats.prefix(3).map(\.displayCommand).joined(separator: ", ")
+                )
+            }
+
+            if !neverUsedSkills.isEmpty {
+                trendRow(
+                    icon: "tray.fill",
+                    color: .orange,
+                    label: "Installed but never used",
+                    value: neverUsedSkills.prefix(3).map(\.triggerCommand).joined(separator: ", ")
+                )
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cardRadius))
+    }
+
+    private func trendMetric(value: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
+        .background(Color.primary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 9))
+    }
+
+    private var allInvocations: [SkillInvocation] {
+        usageTracker.stats.values.flatMap(\.invocations)
+    }
+
+    private func usageCount(days: Int) -> Int {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        return allInvocations.filter { $0.timestamp >= cutoff }.count
+    }
+
+    private var recentlyUsedStats: [SkillUsageStat] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        return usageTracker.rankedStats
+            .filter { ($0.lastUsedDate ?? .distantPast) >= cutoff }
+            .sorted { ($0.lastUsedDate ?? .distantPast) > ($1.lastUsedDate ?? .distantPast) }
+    }
+
+    private var neverUsedSkills: [Skill] {
+        installedSkills.filter { usageTracker.stat(for: $0) == nil }
+    }
+
+    private var installedButNeverUsedCount: Int {
+        neverUsedSkills.count
+    }
+
+    private var projectConfirmedUsageCount: Int {
+        projectUsageContextsByIdentifier.values
+            .flatMap { $0 }
+            .filter(\.isConfirmed)
+            .reduce(0) { $0 + $1.confirmedCount }
+    }
+
+    private func trendRow(icon: String, color: Color, label: String, value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 16, height: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 9))
     }
 
     // MARK: - Insights Card
