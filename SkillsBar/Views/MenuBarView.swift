@@ -20,6 +20,7 @@ struct MenuBarView: View {
     @State private var showSettings = false
     @State private var showAbout = false
     @State private var showUsageStats = false
+    @State private var showProjectSkills = false
     @State private var showInstructionsPopover = false
     @State private var collapsedSections: Set<String> = {
         let defaults = UserDefaults.standard
@@ -119,12 +120,15 @@ struct MenuBarView: View {
         Group {
             if showSettings {
                 SettingsView(skillStore: store, onBack: { showSettings = false })
+            } else if showProjectSkills {
+                ProjectSkillsView(skillStore: store, onBack: { showProjectSkills = false })
             } else if showAbout {
                 AboutView(skillStore: store, onBack: { showAbout = false })
             } else if showUsageStats {
                 UsageStatsView(
                     usageTracker: usageTracker,
                     installedSkillIdentifiers: installedSkillIdentifiers,
+                    projectUsageContextsByIdentifier: projectUsageContextsByIdentifier,
                     onBack: { showUsageStats = false }
                 )
             } else if let agent = selectedAgent {
@@ -163,6 +167,7 @@ struct MenuBarView: View {
                     skill: skill,
                     isPinned: store.isPinned(skill),
                     usageStat: usageTracker.stat(for: skill),
+                    conflictSummary: store.conflictSummary(for: skill),
                     collections: store.orderedCollections,
                     skillCollections: store.collections(for: skill),
                     onBack: { selectedSkill = nil },
@@ -247,6 +252,19 @@ struct MenuBarView: View {
                 Text("\(store.totalItemCount) items")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                Button(action: { showProjectSkills = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: projectHeaderIconName)
+                            .font(.system(size: 12))
+                        if !store.projectSkillRoots.isEmpty {
+                            Text("\(store.projectSkillRoots.count)")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
+                    .foregroundStyle(projectHeaderTint)
+                }
+                .buttonStyle(.plain)
+                .help("Project Skills")
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -288,6 +306,8 @@ struct MenuBarView: View {
             .background(cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: cardRadius))
             .padding(.horizontal, 12)
+
+            searchFilterChips
 
             // Content list
             contentListView
@@ -331,6 +351,12 @@ struct MenuBarView: View {
                 Spacer()
 
                 footerStatusView
+
+                if !store.unavailableProjectSkillRoots.isEmpty {
+                    Spacer()
+
+                    missingProjectRootsMenu
+                }
 
                 Spacer()
 
@@ -395,7 +421,92 @@ struct MenuBarView: View {
         .frame(width: SkillsBarLayout.windowWidth)
     }
 
+    private var projectHeaderIconName: String {
+        store.unavailableProjectSkillRoots.isEmpty ? "folder" : "folder.badge.questionmark"
+    }
+
+    private var projectHeaderTint: Color {
+        store.unavailableProjectSkillRoots.isEmpty ? .secondary : .orange
+    }
+
     // MARK: - Content List
+
+    private var searchFilterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                searchFilterChip(label: "Project", token: "source:project", color: .blue)
+
+                if selectedTab == .claudeCode || selectedTab == .collections {
+                    ForEach(store.projectSkillRoots.filter(\.isEnabled)) { root in
+                        searchFilterChip(label: root.name, token: projectSearchToken(for: root), color: .blue, secondary: true)
+                    }
+                }
+
+                searchFilterChip(label: "User", token: "source:user", color: .secondary)
+                searchFilterChip(label: "Plugin", token: "source:plugin", color: .secondary)
+
+                if selectedTab == .codex || selectedTab == .collections {
+                    searchFilterChip(label: "Built-in", token: "source:builtin", color: .secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+        .frame(height: 24)
+    }
+
+    private func searchFilterChip(label: String, token: String, color: Color, secondary: Bool = false) -> some View {
+        let isActive = isSearchTokenActive(token)
+
+        return Button {
+            toggleSearchToken(token)
+        } label: {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(isActive ? color.opacity(0.18) : Color.secondary.opacity(secondary ? 0.07 : 0.10))
+                .foregroundStyle(isActive ? color : .secondary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(token)
+    }
+
+    private func isSearchTokenActive(_ token: String) -> Bool {
+        searchTokens.contains(token.lowercased())
+    }
+
+    private func toggleSearchToken(_ token: String) {
+        let normalizedToken = token.lowercased()
+        var tokens = searchTokens
+
+        if let index = tokens.firstIndex(of: normalizedToken) {
+            tokens.remove(at: index)
+        } else {
+            tokens.append(normalizedToken)
+        }
+
+        store.searchText = tokens.joined(separator: " ")
+    }
+
+    private var searchTokens: [String] {
+        store.searchText
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+    }
+
+    private func projectSearchToken(for root: ProjectSkillRoot) -> String {
+        let normalized = root.name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .first
+            .map(String.init) ?? root.name.lowercased()
+
+        return "project:\(normalized)"
+    }
 
     private var contentListView: some View {
         if selectedTab == .collections {
@@ -441,6 +552,13 @@ struct MenuBarView: View {
                                 ForEach(agentGroups.filter { $0.id != "pinned" }) { group in
                                     ForEach(group.sections.filter { $0.id == "agent-user" }) { section in
                                         agentSectionCard(group: group, section: section)
+                                    }
+                                }
+
+                                // Project Skills
+                                ForEach(tabGroups.filter { $0.id != "pinned" }) { group in
+                                    ForEach(group.sections.filter { $0.id.hasPrefix("claude-project-") }) { section in
+                                        skillSectionCard(group: group, section: section)
                                     }
                                 }
 
@@ -576,27 +694,37 @@ struct MenuBarView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             if showHeader {
-                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { toggleSection(section.id) } }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(collapsed ? 0 : 90))
-                        if group.id == "pinned" {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.yellow)
+                HStack(spacing: 6) {
+                    Button(action: { withAnimation(.easeInOut(duration: 0.2)) { toggleSection(section.id) } }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                                .rotationEffect(.degrees(collapsed ? 0 : 90))
+                            if group.id == "pinned" {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.yellow)
+                            }
+                            Text(section.title.uppercased())
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .tracking(0.5)
+                            countBadge("\(section.skills.count)")
+                            if let projectRoot = store.projectSkillRoot(for: section),
+                               store.projectSkillRootStatus(for: projectRoot).isUnavailable {
+                                countBadge("unavailable", secondary: true)
+                            }
+                            Spacer()
                         }
-                        Text(section.title.uppercased())
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .tracking(0.5)
-                        countBadge("\(section.skills.count)")
-                        Spacer()
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+
+                    if let projectRoot = store.projectSkillRoot(for: section) {
+                        projectSectionMenu(root: projectRoot, skills: section.skills)
+                    }
                 }
-                .buttonStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.top, 10)
                 .padding(.bottom, collapsed ? 8 : 4)
@@ -616,13 +744,58 @@ struct MenuBarView: View {
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
     }
 
+    private func projectSectionMenu(root: ProjectSkillRoot, skills: [Skill]) -> some View {
+        let status = store.projectSkillRootStatus(for: root)
+
+        return Menu {
+            Button("Copy All Triggers") {
+                let triggers = skills.map(\.triggerCommand).sorted().joined(separator: "\n")
+                copyToPasteboard(triggers, feedback: "Copied triggers")
+            }
+            .disabled(skills.isEmpty)
+            Divider()
+            Button("Refresh Skills") {
+                refreshAll()
+            }
+            .disabled(isRefreshing)
+            Button(preferredEditor.openMenuTitle) {
+                SkillStore.openProject(root, in: preferredEditor)
+            }
+            Button("Open .claude/skills") {
+                SkillStore.openProjectSkillsFolder(root, in: preferredEditor)
+            }
+            .disabled(status == .missingProjectFolder || status == .missingSkillsFolder)
+            Button("Reveal Project") {
+                SkillStore.revealProjectInFinder(root)
+            }
+            Button("Reveal .claude/skills") {
+                SkillStore.revealProjectSkillsFolderInFinder(root)
+            }
+            .disabled(status == .missingProjectFolder || status == .missingSkillsFolder)
+            Divider()
+            Button("Disable Project") {
+                store.setProjectSkillRoot(root, isEnabled: false)
+                showCopyToast("Project disabled")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Project actions")
+    }
+
     private func skillRow(skill: Skill, index: Int, isPinned: Bool, pinnedCount: Int = 0) -> some View {
         Button(action: { selectedSkill = skill }) {
             SkillRowView(
                 skill: skill,
                 isPinned: store.isPinned(skill),
                 usageCount: usageTracker.stat(for: skill)?.totalCount,
-                showSourceBadge: selectedTab == .collections
+                showSourceBadge: selectedTab == .collections,
+                conflictSummary: store.conflictSummary(for: skill)
             )
         }
         .buttonStyle(.plain)
@@ -685,9 +858,11 @@ struct MenuBarView: View {
             Button("Copy Path") {
                 copyToPasteboard(skill.path, feedback: "Copied path")
             }
-            Divider()
-            Button("Delete Skill", role: .destructive) {
-                pendingDeletion = .skill(skill)
+            if !skill.source.isProjectSkill {
+                Divider()
+                Button("Delete Skill", role: .destructive) {
+                    pendingDeletion = .skill(skill)
+                }
             }
         }
     }
@@ -1040,7 +1215,8 @@ struct MenuBarView: View {
                 skill: skill,
                 isPinned: store.isPinned(skill),
                 usageCount: usageTracker.stat(for: skill)?.totalCount,
-                showSourceBadge: true
+                showSourceBadge: true,
+                conflictSummary: store.conflictSummary(for: skill)
             )
         }
         .buttonStyle(.plain)
@@ -1124,6 +1300,7 @@ struct MenuBarView: View {
         selectedSkill = nil
         selectedAgent = nil
         selectedPlugin = nil
+        showProjectSkills = false
         showAbout = false
         showUsageStats = false
         selectedTab = .collections
@@ -1438,11 +1615,11 @@ struct MenuBarView: View {
     private var searchPlaceholder: String {
         switch selectedTab {
         case .collections:
-            return "Search collections or included skills..."
+            return "Search collections, source:project..."
         case .claudeCode:
-            return "Search skills or agents..."
+            return "Search skills, agents, source:project..."
         case .codex:
-            return "Search skills or plugins..."
+            return "Search skills, plugins, source:plugin..."
         }
     }
 
@@ -1565,6 +1742,45 @@ struct MenuBarView: View {
         }
     }
 
+    private var missingProjectRootsMenu: some View {
+        let unavailableRoots = store.unavailableProjectSkillRoots
+
+        return Menu {
+            Button("Refresh Skills") {
+                refreshAll()
+            }
+            .disabled(isRefreshing)
+            Button("Project Skills") {
+                showProjectSkills = true
+            }
+            Divider()
+            ForEach(unavailableRoots) { root in
+                let status = store.projectSkillRootStatus(for: root)
+                Button("\(root.name): \(status.title)") {
+                    showProjectSkills = true
+                }
+                Button("Remove \(root.name)", role: .destructive) {
+                    store.removeProjectSkillRoot(root)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "folder.badge.questionmark")
+                    .font(.system(size: 11))
+                Text(unavailableProjectFooterLabel(for: unavailableRoots.count))
+                    .font(.system(size: 11))
+            }
+            .foregroundStyle(.orange)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Project skill folders that need attention")
+    }
+
+    private func unavailableProjectFooterLabel(for count: Int) -> String {
+        count == 1 ? "1 project unavailable" : "\(count) projects unavailable"
+    }
+
     private func refreshStatusText(since date: Date, now: Date) -> String {
         let elapsed = max(0, now.timeIntervalSince(date))
 
@@ -1588,6 +1804,7 @@ struct MenuBarView: View {
             selectedAgent == nil &&
             selectedPlugin == nil &&
             !showSettings &&
+            !showProjectSkills &&
             !showAbout &&
             !showUsageStats
     }
@@ -1637,6 +1854,9 @@ struct MenuBarView: View {
         if selectedTab == .claudeCode {
             addSkills(from: tabGroups, groupFilter: { $0.id == "pinned" })
             addAgents(from: agentGroups, groupFilter: { $0.id == "pinned" })
+            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-user" })
+            addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-user" })
+            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id.hasPrefix("claude-project-") })
             if let recentSectionID = whatsNewSectionID(for: selectedTab),
                !isSectionCollapsed(recentSectionID) {
                 for item in recentItems {
@@ -1648,8 +1868,6 @@ struct MenuBarView: View {
                     }
                 }
             }
-            addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-user" })
-            addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-user" })
             addSkills(from: tabGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "claude-plugin" })
             addAgents(from: agentGroups, groupFilter: { $0.id != "pinned" }, sectionFilter: { $0.id == "agent-plugin" })
         } else {
@@ -1755,6 +1973,10 @@ struct MenuBarView: View {
         }
         if showSettings {
             showSettings = false
+            return true
+        }
+        if showProjectSkills {
+            showProjectSkills = false
             return true
         }
         if showAbout {
@@ -1913,6 +2135,56 @@ struct MenuBarView: View {
     private var installedSkillIdentifiers: Set<String> {
         let allSkills = store.groups.flatMap { $0.sections.flatMap { $0.skills } }
         return Set(allSkills.map { UsageTracker.identifier(for: $0) })
+    }
+
+    private var projectUsageContextsByIdentifier: [String: [ProjectSkillUsageContext]] {
+        let allSkills = store.groups.flatMap { $0.sections.flatMap { $0.skills } }
+        var contextsByIdentifier: [String: [ProjectSkillUsageContext]] = [:]
+
+        for skill in allSkills where skill.source.isProjectSkill {
+            guard let projectRoot = store.projectSkillRoot(for: skill) else { continue }
+            let identifier = UsageTracker.identifier(for: skill)
+            let stat = usageTracker.stats[identifier]
+            let confirmedCount = stat?.invocations.filter { invocation in
+                invocationProjectPath(invocation.projectPath, matches: projectRoot.path)
+            }.count ?? 0
+
+            contextsByIdentifier[identifier, default: []].append(
+                ProjectSkillUsageContext(
+                    projectName: projectRoot.name,
+                    projectPath: projectRoot.path,
+                    matchKind: confirmedCount > 0 ? .confirmedUsage : .installedMatch,
+                    confirmedCount: confirmedCount
+                )
+            )
+        }
+
+        return contextsByIdentifier.mapValues { contexts in
+            contexts.sorted { lhs, rhs in
+                if lhs.isConfirmed != rhs.isConfirmed {
+                    return lhs.isConfirmed && !rhs.isConfirmed
+                }
+                if lhs.confirmedCount != rhs.confirmedCount {
+                    return lhs.confirmedCount > rhs.confirmedCount
+                }
+                return lhs.projectName.localizedCaseInsensitiveCompare(rhs.projectName) == .orderedAscending
+            }
+        }
+    }
+
+    private func invocationProjectPath(_ invocationPath: String?, matches rootPath: String) -> Bool {
+        guard let invocationPath, !invocationPath.isEmpty else { return false }
+
+        let standardizedRoot = (rootPath as NSString).standardizingPath
+        if (invocationPath as NSString).standardizingPath == standardizedRoot {
+            return true
+        }
+
+        return invocationPath == claudeProjectDirectoryName(for: standardizedRoot)
+    }
+
+    private func claudeProjectDirectoryName(for path: String) -> String {
+        path.replacingOccurrences(of: "/", with: "-")
     }
 }
 

@@ -35,9 +35,10 @@
 ## Features
 
 - **Tabbed browsing** - separate tabs for Claude Code, Codex, and Collections with count badges
-- **Search** - filter skills, plugins, agents, and collections by name, description, metadata, and collection trigger commands
+- **Search** - filter skills, plugins, agents, and collections by name, description, metadata, collection trigger commands, and source tokens such as `source:project`
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
 - **Settings** - choose whether to show What's New, switch between system, light, and dark appearance, and control the default sort from one place
+- **Project skills** - manage trusted project folders in a dedicated screen to show repo-local Claude Code skills from `.claude/skills`, with project health, conflict indicators, project actions, and project-aware stats
 - **Preferred editor** - choose an installed editor such as VS Code, WebStorm, Cursor, Zed, or Xcode for opening skills, agents, plugins, and global instructions
 - **Start at Login** - open SkillsBar automatically when you sign in, with a shortcut to Login Items settings if approval is needed
 - **Sort options** - sort skills by A-Z, Recently Modified, or Most Used, with the selected order persisted across restarts
@@ -63,6 +64,7 @@
 | `~/.claude/skills/`        | Claude Code user skills                    |
 | `~/.claude/plugins/cache/` | Claude Code plugin skills                  |
 | `~/.claude/agents/`        | Claude Code user agents                    |
+| `<project>/.claude/skills/` | Approved project-level Claude Code skills  |
 | `~/.codex/skills/`         | Codex built-in and user skills             |
 | `~/.codex/plugins/cache/`  | Codex plugins and plugin-provided skills   |
 | `~/.codex/history.jsonl`   | Codex CLI skill invocation history         |

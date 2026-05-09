@@ -116,6 +116,26 @@ struct SkillUsageStat: Identifiable {
     }
 }
 
+struct ProjectSkillUsageContext: Identifiable, Hashable {
+    enum MatchKind: Hashable {
+        case confirmedUsage
+        case installedMatch
+    }
+
+    let projectName: String
+    let projectPath: String
+    let matchKind: MatchKind
+    let confirmedCount: Int
+
+    var id: String {
+        "\(projectPath)::\(matchKind)"
+    }
+
+    var isConfirmed: Bool {
+        matchKind == .confirmedUsage
+    }
+}
+
 struct ParsedSessionFile: Codable {
     let path: String
     let lastModified: Date

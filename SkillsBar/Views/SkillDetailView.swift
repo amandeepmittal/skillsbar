@@ -4,6 +4,7 @@ struct SkillDetailView: View {
     let skill: Skill
     let isPinned: Bool
     var usageStat: SkillUsageStat? = nil
+    var conflictSummary: SkillConflictSummary? = nil
     let collections: [SkillCollection]
     let skillCollections: [SkillCollection]
     let onBack: () -> Void
@@ -66,12 +67,14 @@ struct SkillDetailView: View {
                         color: .secondary,
                         action: copyPath
                     )
-                    actionButton(
-                        icon: "trash",
-                        label: "Delete",
-                        color: .red.opacity(0.8),
-                        action: { showDeleteConfirmation = true }
-                    )
+                    if !skill.source.isProjectSkill {
+                        actionButton(
+                            icon: "trash",
+                            label: "Delete",
+                            color: .red.opacity(0.8),
+                            action: { showDeleteConfirmation = true }
+                        )
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -89,6 +92,13 @@ struct SkillDetailView: View {
                         HStack(spacing: 8) {
                             badge(skill.source.groupTitle, color: badgeColor)
                             badge(skill.source.sectionTitle, color: .gray)
+                            if let projectName = skill.source.projectName {
+                                badge(projectName, color: .blue)
+                            }
+                            if let conflictSummary {
+                                badge(conflictSummary.label, color: .orange)
+                                    .help(conflictSummary.helpText)
+                            }
                             if let version = skill.version {
                                 badge("v\(version)", color: .blue)
                             }

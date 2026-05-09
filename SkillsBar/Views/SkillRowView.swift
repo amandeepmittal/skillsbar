@@ -5,6 +5,7 @@ struct SkillRowView: View {
     let isPinned: Bool
     var usageCount: Int? = nil
     var showSourceBadge = false
+    var conflictSummary: SkillConflictSummary? = nil
     @State private var isHovered = false
 
     private var hoverColor: Color {
@@ -35,6 +36,35 @@ struct SkillRowView: View {
                             .background(hoverColor.opacity(0.14))
                             .foregroundStyle(hoverColor)
                             .clipShape(Capsule())
+                    }
+                    if let projectName = skill.source.projectName {
+                        Text("Project")
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.14))
+                            .foregroundStyle(.blue)
+                            .clipShape(Capsule())
+                        Text(projectName)
+                            .font(.system(size: 9, weight: .bold))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.14))
+                            .foregroundStyle(.blue)
+                            .clipShape(Capsule())
+                    }
+                    if let conflictSummary {
+                        Label(conflictSummary.label, systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .labelStyle(.titleAndIcon)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.14))
+                            .foregroundStyle(.orange)
+                            .clipShape(Capsule())
+                            .help(conflictSummary.helpText)
                     }
                     if skill.isNew {
                         Text("NEW")

@@ -1,12 +1,29 @@
 import Foundation
 import SwiftUI
 
+private struct SkillSearchQuery {
+    let rawValue: String
+    let freeText: String
+    let terms: [String]
+    let sourceCategories: Set<SkillSourceCategory>
+    let projectTerms: [String]
+
+    var isEmpty: Bool {
+        rawValue.isEmpty
+    }
+
+    var hasFilters: Bool {
+        !sourceCategories.isEmpty || !projectTerms.isEmpty
+    }
+}
+
 @MainActor
 final class SkillStore: ObservableObject {
     @Published var groups: [SkillGroup] = []
     @Published var agentGroups: [AgentGroup] = []
     @Published var plugins: [Plugin] = []
     @Published var collections: [SkillCollection] = []
+    @Published var projectSkillRoots: [ProjectSkillRoot] = []
     @Published var lastRefreshDate: Date?
     @Published var isRefreshing = false
     @Published var searchText: String = ""
@@ -34,6 +51,7 @@ final class SkillStore: ObservableObject {
     private static let pinnedOrderKey = "pinnedSkillOrder"
     private static let sortKey = "skillSortOption"
     private static let collectionsKey = "skillCollections"
+    private static let projectSkillRootsKey = "projectSkillRoots"
     private static let watchedRefreshDelay: UInt64 = 1_500_000_000
 
     init(usageTracker: UsageTracker? = nil) {
@@ -61,6 +79,11 @@ final class SkillStore: ObservableObject {
            let savedCollections = try? JSONDecoder().decode([SkillCollection].self, from: savedData) {
             collections = savedCollections
         }
+
+        if let savedData = UserDefaults.standard.data(forKey: Self.projectSkillRootsKey),
+           let savedRoots = try? JSONDecoder().decode([ProjectSkillRoot].self, from: savedData) {
+            projectSkillRoots = savedRoots
+        }
     }
 
     private func persistPins() {
@@ -73,6 +96,11 @@ final class SkillStore: ObservableObject {
         UserDefaults.standard.set(encoded, forKey: Self.collectionsKey)
     }
 
+    private func persistProjectSkillRoots() {
+        let encoded = try? JSONEncoder().encode(projectSkillRoots)
+        UserDefaults.standard.set(encoded, forKey: Self.projectSkillRootsKey)
+    }
+
     var orderedCollections: [SkillCollection] {
         collections.enumerated()
             .sorted { lhs, rhs in
@@ -82,6 +110,138 @@ final class SkillStore: ObservableObject {
                 return lhs.offset < rhs.offset
             }
             .map(\.element)
+    }
+
+    var enabledProjectSkillRoots: [ProjectSkillRoot] {
+        projectSkillRoots.filter(\.isEnabled)
+    }
+
+    var unavailableProjectSkillRoots: [ProjectSkillRoot] {
+        projectSkillRoots.filter { projectSkillRootStatus(for: $0).isUnavailable }
+    }
+
+    // MARK: - Project Skills
+
+    func addProjectSkillRoot(_ root: ProjectSkillRoot) {
+        let standardizedRoot = ProjectSkillRoot(name: root.name, path: root.path, isEnabled: true)
+
+        if let index = projectSkillRoots.firstIndex(where: { standardizedPath($0.path) == standardizedRoot.path }) {
+            projectSkillRoots[index].name = standardizedRoot.name
+            projectSkillRoots[index].isEnabled = true
+            projectSkillRoots[index].updatedAt = Date()
+        } else {
+            projectSkillRoots.append(standardizedRoot)
+        }
+
+        persistProjectSkillRoots()
+        refresh()
+        startWatching()
+    }
+
+    func setProjectSkillRoot(_ root: ProjectSkillRoot, isEnabled: Bool) {
+        guard let index = projectSkillRoots.firstIndex(where: { $0.id == root.id }) else { return }
+        projectSkillRoots[index].isEnabled = isEnabled
+        projectSkillRoots[index].updatedAt = Date()
+        persistProjectSkillRoots()
+        refresh()
+        startWatching()
+    }
+
+    func removeProjectSkillRoot(_ root: ProjectSkillRoot) {
+        projectSkillRoots.removeAll { $0.id == root.id }
+        removeSkillReferences(inside: root.claudeSkillsPath)
+        persistProjectSkillRoots()
+        refresh()
+        startWatching()
+    }
+
+    func projectSkillCount(for root: ProjectSkillRoot) -> Int {
+        projectSkills(for: root).count
+    }
+
+    func projectSkills(for root: ProjectSkillRoot) -> [Skill] {
+        lastScannedSkills.filter { skill in
+            guard let projectRootPath = skill.source.projectRootPath else { return false }
+            return standardizedPath(projectRootPath) == standardizedPath(root.path)
+        }
+    }
+
+    func projectSkillRootStatus(for root: ProjectSkillRoot) -> ProjectSkillRootStatus {
+        guard root.isEnabled else { return .disabled }
+
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+
+        guard fileManager.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return .missingProjectFolder
+        }
+
+        isDirectory = false
+        guard fileManager.fileExists(atPath: root.claudeSkillsPath, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return .missingSkillsFolder
+        }
+
+        return .available
+    }
+
+    func projectSkillRoot(for section: SkillSection) -> ProjectSkillRoot? {
+        section.skills.compactMap { skill -> ProjectSkillRoot? in
+            guard case .claudeCode(.project(let root)) = skill.source else { return nil }
+            return root
+        }.first
+    }
+
+    func projectSkillRoot(for skill: Skill) -> ProjectSkillRoot? {
+        guard case .claudeCode(.project(let root)) = skill.source else { return nil }
+        return root
+    }
+
+    func conflictSummary(for skill: Skill) -> SkillConflictSummary? {
+        guard skill.source.isProjectSkill else { return nil }
+
+        let trigger = normalizedSearchValue(skill.triggerCommand)
+        let name = normalizedSearchValue(skill.displayName)
+
+        var triggerMatchCount = 0
+        var nameMatchCount = 0
+        var descriptions: [String] = []
+        var seenPaths: Set<String> = []
+
+        for candidate in lastScannedSkills where candidate.path != skill.path {
+            let triggerMatches = normalizedSearchValue(candidate.triggerCommand) == trigger
+            let nameMatches = normalizedSearchValue(candidate.displayName) == name
+            guard triggerMatches || nameMatches else { continue }
+            guard seenPaths.insert(candidate.path).inserted else { continue }
+
+            if triggerMatches {
+                triggerMatchCount += 1
+            }
+            if nameMatches {
+                nameMatchCount += 1
+            }
+
+            let matchLabel: String
+            switch (triggerMatches, nameMatches) {
+            case (true, true):
+                matchLabel = "same trigger and name"
+            case (true, false):
+                matchLabel = "same trigger"
+            case (false, true):
+                matchLabel = "same name"
+            case (false, false):
+                continue
+            }
+
+            descriptions.append("\(candidate.source.shortScopeLabel): \(candidate.displayName) (\(matchLabel))")
+        }
+
+        guard !descriptions.isEmpty else { return nil }
+
+        return SkillConflictSummary(
+            triggerMatchCount: triggerMatchCount,
+            nameMatchCount: nameMatchCount,
+            matchingSkillDescriptions: descriptions.sorted()
+        )
     }
 
     func movePinnedItem(from sourcePath: String, toIndex destinationIndex: Int) {
@@ -232,7 +392,7 @@ final class SkillStore: ObservableObject {
     }
 
     func resolvedCollections(searchText query: String = "") -> [ResolvedSkillCollection] {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let searchQuery = parseSkillSearchQuery(query)
         let skillLookup = Dictionary(uniqueKeysWithValues: lastScannedSkills.map { ($0.path, $0) })
 
         return orderedCollections.compactMap { collection in
@@ -241,22 +401,16 @@ final class SkillStore: ObservableObject {
             let missingCount = missingSkillPaths.count
 
             let visibleSkills: [Skill]
-            if trimmedQuery.isEmpty {
+            if searchQuery.isEmpty {
                 visibleSkills = resolvedSkills
-            } else if collection.name.lowercased().contains(trimmedQuery) {
+            } else if !searchQuery.hasFilters && collection.name.lowercased().contains(searchQuery.freeText) {
                 visibleSkills = resolvedSkills
             } else {
-                visibleSkills = resolvedSkills.filter { skill in
-                    skill.name.lowercased().contains(trimmedQuery) ||
-                    skill.description.lowercased().contains(trimmedQuery) ||
-                    skill.triggerCommand.lowercased().contains(trimmedQuery) ||
-                    skill.source.groupTitle.lowercased().contains(trimmedQuery) ||
-                    skill.source.sectionTitle.lowercased().contains(trimmedQuery)
-                }
+                visibleSkills = resolvedSkills.filter { skillMatchesSearch($0, query: searchQuery) }
             }
 
-            let nameMatches = collection.name.lowercased().contains(trimmedQuery)
-            guard trimmedQuery.isEmpty || nameMatches || !visibleSkills.isEmpty else { return nil }
+            let nameMatches = !searchQuery.hasFilters && collection.name.lowercased().contains(searchQuery.freeText)
+            guard searchQuery.isEmpty || nameMatches || !visibleSkills.isEmpty else { return nil }
 
             return ResolvedSkillCollection(
                 collection: collection,
@@ -302,6 +456,36 @@ final class SkillStore: ObservableObject {
         }
 
         if didChange {
+            persistCollections()
+        }
+    }
+
+    private func removeSkillReferences(inside directory: String) {
+        let standardizedDirectory = standardizedPath(directory)
+
+        let removedPinnedPaths = pinnedPaths.filter { path in
+            self.path(standardizedPath(path), isEqualToOrInside: standardizedDirectory)
+        }
+
+        if !removedPinnedPaths.isEmpty {
+            pinnedPaths.subtract(removedPinnedPaths)
+            pinnedOrder.removeAll { removedPinnedPaths.contains($0) }
+            persistPins()
+        }
+
+        var didChangeCollections = false
+        for index in collections.indices {
+            let originalCount = collections[index].skillPaths.count
+            collections[index].skillPaths.removeAll { path in
+                self.path(standardizedPath(path), isEqualToOrInside: standardizedDirectory)
+            }
+            if collections[index].skillPaths.count != originalCount {
+                collections[index].updatedAt = Date()
+                didChangeCollections = true
+            }
+        }
+
+        if didChangeCollections {
             persistCollections()
         }
     }
@@ -369,16 +553,104 @@ final class SkillStore: ObservableObject {
 
     // MARK: - Filtering (Skills)
 
+    private func parseSkillSearchQuery(_ rawValue: String) -> SkillSearchQuery {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else {
+            return SkillSearchQuery(
+                rawValue: "",
+                freeText: "",
+                terms: [],
+                sourceCategories: [],
+                projectTerms: []
+            )
+        }
+
+        var terms: [String] = []
+        var sourceCategories: Set<SkillSourceCategory> = []
+        var projectTerms: [String] = []
+
+        for token in trimmed.split(whereSeparator: \.isWhitespace).map(String.init) {
+            if token.hasPrefix("source:") {
+                let value = String(token.dropFirst("source:".count))
+                if let category = SkillSourceCategory(rawValue: value) {
+                    sourceCategories.insert(category)
+                } else if value == "built-in" || value == "built_in" {
+                    sourceCategories.insert(.builtin)
+                }
+                continue
+            }
+
+            if token.hasPrefix("project:") {
+                let value = String(token.dropFirst("project:".count))
+                if !value.isEmpty {
+                    projectTerms.append(value)
+                    sourceCategories.insert(.project)
+                }
+                continue
+            }
+
+            terms.append(token)
+        }
+
+        return SkillSearchQuery(
+            rawValue: trimmed,
+            freeText: trimmed,
+            terms: terms,
+            sourceCategories: sourceCategories,
+            projectTerms: projectTerms
+        )
+    }
+
+    private func skillMatchesSearch(_ skill: Skill, query: SkillSearchQuery) -> Bool {
+        if !query.sourceCategories.isEmpty,
+           !query.sourceCategories.contains(skill.source.searchCategory) {
+            return false
+        }
+
+        if !query.projectTerms.isEmpty {
+            guard let projectName = skill.source.projectName?.lowercased() else { return false }
+            let projectPath = skill.source.projectRootPath?.lowercased() ?? ""
+            guard query.projectTerms.allSatisfy({ projectName.contains($0) || projectPath.contains($0) }) else {
+                return false
+            }
+        }
+
+        if query.hasFilters {
+            guard !query.terms.isEmpty else { return true }
+            return query.terms.allSatisfy { term in
+                skillSearchFields(for: skill).contains { $0.contains(term) }
+            }
+        }
+
+        return skillSearchFields(for: skill).contains { $0.contains(query.freeText) }
+    }
+
+    private func skillSearchFields(for skill: Skill) -> [String] {
+        [
+            skill.name,
+            skill.displayName,
+            skill.description,
+            skill.triggerCommand,
+            skill.source.groupTitle,
+            skill.source.sectionTitle,
+            skill.source.shortScopeLabel,
+            skill.source.searchCategory.rawValue,
+            skill.source.projectName ?? "",
+            skill.source.projectRootPath ?? "",
+        ].map(normalizedSearchValue)
+    }
+
+    private func normalizedSearchValue(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     var filteredGroups: [SkillGroup] {
-        guard !searchText.isEmpty else { return groups }
-        let query = searchText.lowercased()
+        let query = parseSkillSearchQuery(searchText)
+        guard !query.isEmpty else { return groups }
 
         return groups.compactMap { group in
             let filteredSections = group.sections.compactMap { section in
-                let filtered = section.skills.filter { skill in
-                    skill.name.lowercased().contains(query) ||
-                    skill.description.lowercased().contains(query)
-                }
+                let filtered = section.skills.filter { skillMatchesSearch($0, query: query) }
                 return filtered.isEmpty ? nil : SkillSection(id: section.id, title: section.title, skills: filtered)
             }
             return filteredSections.isEmpty ? nil : SkillGroup(id: group.id, title: group.title, sections: filteredSections)
@@ -394,17 +666,20 @@ final class SkillStore: ObservableObject {
     }
 
     var filteredPlugins: [Plugin] {
-        guard !searchText.isEmpty else { return plugins }
-        let query = searchText.lowercased()
+        let query = parseSkillSearchQuery(searchText)
+        guard !query.isEmpty else { return plugins }
+        guard query.sourceCategories.isEmpty || query.sourceCategories.contains(.plugin) else { return [] }
+        let freeText = query.hasFilters ? query.terms.joined(separator: " ") : query.freeText
+        guard !freeText.isEmpty else { return plugins }
 
         return plugins.filter { plugin in
-            plugin.displayName.lowercased().contains(query) ||
-            plugin.name.lowercased().contains(query) ||
-            plugin.description.lowercased().contains(query) ||
-            plugin.shortDescription.lowercased().contains(query) ||
-            (plugin.publisher?.lowercased().contains(query) ?? false) ||
-            (plugin.version?.lowercased().contains(query) ?? false) ||
-            plugin.keywords.contains(where: { $0.lowercased().contains(query) })
+            plugin.displayName.lowercased().contains(freeText) ||
+            plugin.name.lowercased().contains(freeText) ||
+            plugin.description.lowercased().contains(freeText) ||
+            plugin.shortDescription.lowercased().contains(freeText) ||
+            (plugin.publisher?.lowercased().contains(freeText) ?? false) ||
+            (plugin.version?.lowercased().contains(freeText) ?? false) ||
+            plugin.keywords.contains(where: { $0.lowercased().contains(freeText) })
         }
     }
 
@@ -545,10 +820,11 @@ final class SkillStore: ObservableObject {
         }
 
         isRefreshing = true
+        let projectSkillRoots = self.projectSkillRoots
 
         refreshTask = Task(priority: .userInitiated) { [weak self] in
             let scanned = await Task.detached(priority: .userInitiated) {
-                Self.scanContent()
+                Self.scanContent(projectSkillRoots: projectSkillRoots)
             }.value
 
             guard let self else { return }
@@ -577,6 +853,8 @@ final class SkillStore: ObservableObject {
 
     @discardableResult
     func deleteSkill(_ skill: Skill) -> Bool {
+        guard !skill.source.isProjectSkill else { return false }
+
         let fileManager = FileManager.default
         let skillDir = (skill.path as NSString).deletingLastPathComponent
 
@@ -649,6 +927,22 @@ final class SkillStore: ObservableObject {
         NSWorkspace.shared.selectFile(plugin.path, inFileViewerRootedAtPath: "")
     }
 
+    static func openProject(_ root: ProjectSkillRoot, in editor: ExternalEditor) {
+        open(URL(fileURLWithPath: root.path), in: editor)
+    }
+
+    static func openProjectSkillsFolder(_ root: ProjectSkillRoot, in editor: ExternalEditor) {
+        open(URL(fileURLWithPath: root.claudeSkillsPath), in: editor)
+    }
+
+    static func revealProjectInFinder(_ root: ProjectSkillRoot) {
+        NSWorkspace.shared.selectFile(root.path, inFileViewerRootedAtPath: "")
+    }
+
+    static func revealProjectSkillsFolderInFinder(_ root: ProjectSkillRoot) {
+        NSWorkspace.shared.selectFile(root.claudeSkillsPath, inFileViewerRootedAtPath: "")
+    }
+
     // MARK: - Global Instructions Files
 
     enum GlobalInstructionsFile: String, CaseIterable, Identifiable {
@@ -688,13 +982,17 @@ final class SkillStore: ObservableObject {
         let claudeRoot = (home as NSString).appendingPathComponent(".claude")
         let codexRoot = (home as NSString).appendingPathComponent(".codex")
 
-        let targetPaths = [
+        var targetPaths = [
             (home as NSString).appendingPathComponent(".claude/skills"),
             (home as NSString).appendingPathComponent(".claude/plugins/cache"),
             (home as NSString).appendingPathComponent(".claude/agents"),
             (home as NSString).appendingPathComponent(".codex/skills"),
             (home as NSString).appendingPathComponent(".codex/plugins/cache"),
         ].map { standardizedPath($0) }
+
+        for root in enabledProjectSkillRoots {
+            targetPaths.append(standardizedPath(root.claudeSkillsPath))
+        }
 
         watchedRefreshPrefixes = targetPaths
         watchedCreationMarkers = []
@@ -718,6 +1016,23 @@ final class SkillStore: ObservableObject {
             } else {
                 watchPaths.append(standardizedPath(home))
                 watchedCreationMarkers.insert(standardizedPath(codexRoot))
+            }
+        }
+
+        for root in enabledProjectSkillRoots {
+            let projectPath = standardizedPath(root.path)
+            let projectClaudeRoot = standardizedPath((projectPath as NSString).appendingPathComponent(".claude"))
+            let projectSkillsPath = standardizedPath(root.claudeSkillsPath)
+
+            if fileManager.fileExists(atPath: projectSkillsPath) {
+                watchPaths.append(projectSkillsPath)
+            } else if fileManager.fileExists(atPath: projectClaudeRoot) {
+                watchPaths.append(projectClaudeRoot)
+                watchedCreationMarkers.insert(projectSkillsPath)
+            } else if fileManager.fileExists(atPath: projectPath) {
+                watchPaths.append(projectPath)
+                watchedCreationMarkers.insert(projectClaudeRoot)
+                watchedCreationMarkers.insert(projectSkillsPath)
             }
         }
 
@@ -780,8 +1095,8 @@ final class SkillStore: ObservableObject {
         return deduped
     }
 
-    nonisolated private static func scanContent() -> (skills: [Skill], agents: [Agent], plugins: [Plugin]) {
-        let skills = SkillScanner().scanAll()
+    nonisolated private static func scanContent(projectSkillRoots: [ProjectSkillRoot]) -> (skills: [Skill], agents: [Agent], plugins: [Plugin]) {
+        let skills = SkillScanner().scanAll(projectSkillRoots: projectSkillRoots)
         let agents = AgentScanner().scanAll()
         let plugins = PluginScanner().scanInstalledPlugins()
         return (skills, agents, plugins)
@@ -819,6 +1134,7 @@ final class SkillStore: ObservableObject {
     private func buildGroups(from skills: [Skill]) -> [SkillGroup] {
         var claudeUserSkills: [Skill] = []
         var claudePluginSkills: [Skill] = []
+        var claudeProjectSkillsByRoot: [ProjectSkillRoot: [Skill]] = [:]
         var codexBuiltinSkills: [Skill] = []
         var codexPluginSkills: [Skill] = []
         var codexUserSkills: [Skill] = []
@@ -827,6 +1143,7 @@ final class SkillStore: ObservableObject {
             switch skill.source {
             case .claudeCode(.user): claudeUserSkills.append(skill)
             case .claudeCode(.plugin): claudePluginSkills.append(skill)
+            case .claudeCode(.project(let root)): claudeProjectSkillsByRoot[root, default: []].append(skill)
             case .codexCLI(.builtin): codexBuiltinSkills.append(skill)
             case .codexCLI(.plugin): codexPluginSkills.append(skill)
             case .codexCLI(.user): codexUserSkills.append(skill)
@@ -835,10 +1152,27 @@ final class SkillStore: ObservableObject {
 
         var groups: [SkillGroup] = []
 
-        let claudeSections = [
+        var claudeSections = [
             claudeUserSkills.isEmpty ? nil : SkillSection(id: "claude-user", title: "User Skills", skills: sortSkills(claudeUserSkills)),
-            claudePluginSkills.isEmpty ? nil : SkillSection(id: "claude-plugin", title: "Plugin Skills", skills: sortSkills(claudePluginSkills)),
         ].compactMap { $0 }
+
+        let projectSections = claudeProjectSkillsByRoot
+            .sorted { lhs, rhs in
+                lhs.key.name.localizedCaseInsensitiveCompare(rhs.key.name) == .orderedAscending
+            }
+            .map { root, skills in
+                SkillSection(
+                    id: "claude-project-\(root.id.uuidString)",
+                    title: "\(root.name) Project Skills",
+                    skills: sortSkills(skills)
+                )
+            }
+
+        claudeSections.append(contentsOf: projectSections)
+
+        if !claudePluginSkills.isEmpty {
+            claudeSections.append(SkillSection(id: "claude-plugin", title: "Plugin Skills", skills: sortSkills(claudePluginSkills)))
+        }
 
         if !claudeSections.isEmpty {
             groups.append(SkillGroup(id: "claude-code", title: "Claude Code", sections: claudeSections))

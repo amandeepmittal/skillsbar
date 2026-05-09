@@ -4,9 +4,12 @@ struct SkillScanner {
     private let fileManager = FileManager.default
     private let home = FileManager.default.homeDirectoryForCurrentUser.path
 
-    func scanAll() -> [Skill] {
+    func scanAll(projectSkillRoots: [ProjectSkillRoot] = []) -> [Skill] {
         var skills: [Skill] = []
         skills.append(contentsOf: scanClaudeCodeUserSkills())
+        for root in projectSkillRoots where root.isEnabled {
+            skills.append(contentsOf: scanClaudeCodeProjectSkills(in: root))
+        }
         skills.append(contentsOf: scanClaudeCodePluginSkills())
         skills.append(contentsOf: scanCodexPluginSkills())
         skills.append(contentsOf: scanCodexBuiltInSkills())
@@ -20,6 +23,11 @@ struct SkillScanner {
     func scanClaudeCodeUserSkills() -> [Skill] {
         let dir = (home as NSString).appendingPathComponent(".claude/skills")
         return scanDirectChildren(dir: dir, source: .claudeCode(.user))
+    }
+
+    /// Scans a user-approved project's .claude/skills/ directory for direct child folders containing SKILL.md.
+    func scanClaudeCodeProjectSkills(in root: ProjectSkillRoot) -> [Skill] {
+        scanDirectChildren(dir: root.claudeSkillsPath, source: .claudeCode(.project(root)))
     }
 
     /// Recursively scans ~/.claude/plugins/cache/ for any SKILL.md files

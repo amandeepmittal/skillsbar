@@ -53,8 +53,8 @@ struct Skill: Identifiable, Hashable {
 
     var triggerCommand: String {
         switch source {
-        case .claudeCode(.user):
-            // ~/.claude/skills/<folder-name>/SKILL.md -> /folder-name
+        case .claudeCode(.user), .claudeCode(.project(_)):
+            // <skills-root>/<folder-name>/SKILL.md -> /folder-name
             let folderName = URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent
             return "/\(folderName)"
 
@@ -98,6 +98,8 @@ struct Skill: Identifiable, Hashable {
         switch source {
         case .claudeCode(.user):
             return "Type in Claude Code CLI"
+        case .claudeCode(.project(let root)):
+            return "Available in Claude Code when working in \(root.name)."
         case .claudeCode(.plugin):
             return "Use the Skill tool or type /skill-name in Claude Code"
         case .codexCLI(.builtin):

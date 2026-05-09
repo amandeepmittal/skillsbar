@@ -50,6 +50,7 @@ private enum UsageAvailabilityStatus: Equatable {
 struct UsageStatsView: View {
     @ObservedObject var usageTracker: UsageTracker
     let installedSkillIdentifiers: Set<String>
+    let projectUsageContextsByIdentifier: [String: [ProjectSkillUsageContext]]
     let onBack: () -> Void
 
     var body: some View {
@@ -194,7 +195,8 @@ struct UsageStatsView: View {
                     color: .yellow,
                     label: "Most used",
                     value: "\(top.displayCommand) (\(top.totalCount)x)",
-                    source: top.source
+                    source: top.source,
+                    projectContexts: projectUsageContexts(for: top)
                 )
             }
 
@@ -206,7 +208,8 @@ struct UsageStatsView: View {
                     color: .blue,
                     label: "Last used",
                     value: "\(latest.0.displayCommand) \(relativeDate(latest.1))",
-                    source: latest.0.source
+                    source: latest.0.source,
+                    projectContexts: projectUsageContexts(for: latest.0)
                 )
             }
 
@@ -227,7 +230,14 @@ struct UsageStatsView: View {
         .clipShape(RoundedRectangle(cornerRadius: cardRadius))
     }
 
-    private func insightRow(icon: String, color: Color, label: String, value: String, source: UsageSource?) -> some View {
+    private func insightRow(
+        icon: String,
+        color: Color,
+        label: String,
+        value: String,
+        source: UsageSource?,
+        projectContexts: [ProjectSkillUsageContext] = []
+    ) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 11))
@@ -241,6 +251,9 @@ struct UsageStatsView: View {
                 .font(.system(size: 12))
                 .lineLimit(1)
             Spacer(minLength: 0)
+            if !projectContexts.isEmpty {
+                projectUsageBadges(for: projectContexts)
+            }
             if let source {
                 sourceTag(source)
             }
@@ -305,6 +318,7 @@ struct UsageStatsView: View {
 
     private func rankedRow(stat: SkillUsageStat, index: Int) -> some View {
         let availability = availabilityStatus(for: stat)
+        let projectContexts = projectUsageContexts(for: stat)
 
         return HStack(spacing: 10) {
             Text("#\(index)")
@@ -319,6 +333,9 @@ struct UsageStatsView: View {
                         .foregroundStyle(availability.isUnavailable ? .secondary : .primary)
                     if availability.isUnavailable {
                         availabilityBadge(availability)
+                    }
+                    if !projectContexts.isEmpty {
+                        projectUsageBadges(for: projectContexts)
                     }
                 }
 
@@ -406,6 +423,71 @@ struct UsageStatsView: View {
             .background(availability.tint.opacity(0.14))
             .foregroundStyle(availability.tint)
             .clipShape(Capsule())
+    }
+
+    private func projectUsageBadges(for contexts: [ProjectSkillUsageContext]) -> some View {
+        HStack(spacing: 4) {
+            projectUsageBadge("Project")
+            projectUsageBadge(projectUsageLabel(for: contexts), secondary: true)
+        }
+        .help(projectUsageHelp(for: contexts))
+    }
+
+    private func projectUsageBadge(_ label: String, secondary: Bool = false) -> some View {
+        Text(label)
+            .font(.system(size: 9, weight: .bold))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.blue.opacity(secondary ? 0.10 : 0.14))
+            .foregroundStyle(.blue)
+            .clipShape(Capsule())
+    }
+
+    private func projectUsageLabel(for contexts: [ProjectSkillUsageContext]) -> String {
+        let confirmed = contexts.filter(\.isConfirmed)
+
+        if confirmed.count == 1 {
+            let context = confirmed[0]
+            return context.confirmedCount > 0 ? "\(context.projectName) \(context.confirmedCount)x" : context.projectName
+        }
+
+        if confirmed.count > 1 {
+            return "\(confirmed.count) projects"
+        }
+
+        if contexts.count == 1 {
+            return contexts[0].projectName
+        }
+
+        return "\(contexts.count) projects"
+    }
+
+    private func projectUsageHelp(for contexts: [ProjectSkillUsageContext]) -> String {
+        let confirmed = contexts.filter(\.isConfirmed)
+        let installedOnly = contexts.filter { !$0.isConfirmed }
+
+        var lines: [String] = []
+
+        if !confirmed.isEmpty {
+            let summary = confirmed
+                .map { "\($0.projectName): \($0.confirmedCount)x" }
+                .joined(separator: ", ")
+            lines.append("Confirmed session project usage: \(summary).")
+        }
+
+        if !installedOnly.isEmpty {
+            let projectList = installedOnly.map(\.projectName).joined(separator: ", ")
+            lines.append("Installed project skill with this trigger: \(projectList).")
+        }
+
+        lines.append("Totals are still grouped by trigger, so matching global skills can share this count.")
+        return lines.joined(separator: "\n")
+    }
+
+    private func projectUsageContexts(for stat: SkillUsageStat) -> [ProjectSkillUsageContext] {
+        projectUsageContextsByIdentifier[stat.id] ?? []
     }
 
     private func availabilityStatus(for stat: SkillUsageStat) -> UsageAvailabilityStatus {

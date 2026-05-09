@@ -3,7 +3,7 @@ import SwiftUI
 struct AboutView: View {
     @ObservedObject var skillStore: SkillStore
     let onBack: () -> Void
-    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.8"
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.7.9"
     private let heroCornerRadius: CGFloat = 22
     private let sectionCornerRadius: CGFloat = 16
     private let fileManager = FileManager.default
@@ -144,7 +144,7 @@ struct AboutView: View {
 
     private var watchedPaths: [(displayPath: String, resolvedURL: URL)] {
         let homeURL = fileManager.homeDirectoryForCurrentUser
-        return [
+        var paths = [
             ("~/.claude/skills/", homeURL.appendingPathComponent(".claude/skills", isDirectory: true)),
             ("~/.claude/plugins/cache/", homeURL.appendingPathComponent(".claude/plugins/cache", isDirectory: true)),
             ("~/.claude/agents/", homeURL.appendingPathComponent(".claude/agents", isDirectory: true)),
@@ -154,6 +154,26 @@ struct AboutView: View {
             ("~/.codex/history.jsonl", homeURL.appendingPathComponent(".codex/history.jsonl")),
             ("~/.codex/sessions/", homeURL.appendingPathComponent(".codex/sessions", isDirectory: true))
         ]
+
+        paths.append(contentsOf: skillStore.enabledProjectSkillRoots.map { root in
+            (
+                "\(displayProjectSkillsPath(for: root))",
+                URL(fileURLWithPath: root.claudeSkillsPath, isDirectory: true)
+            )
+        })
+
+        return paths
+    }
+
+    private func displayProjectSkillsPath(for root: ProjectSkillRoot) -> String {
+        let homePath = fileManager.homeDirectoryForCurrentUser.path
+        let path = root.claudeSkillsPath
+
+        if path.hasPrefix(homePath + "/") {
+            return "~" + path.dropFirst(homePath.count) + "/"
+        }
+
+        return path + "/"
     }
 
     private var footerLinks: some View {
