@@ -29,7 +29,7 @@
   &nbsp;&nbsp;
   <img src="screenshots/plugin-detail.png" width="320" alt="Plugin detail view" />
   &nbsp;&nbsp;
-  <img src="screenshots/skill-detail.png" width="320" alt="Skill detail view" />
+  <img src="screenshots/skill-detail.png" width="320" alt="Project skill detail view" />
   &nbsp;&nbsp;
   <img src="screenshots/instructions-menu.png" width="320" alt="Global instructions menu" />
   &nbsp;&nbsp;
