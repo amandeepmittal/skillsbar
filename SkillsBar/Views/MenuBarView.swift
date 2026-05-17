@@ -133,6 +133,10 @@ struct MenuBarView: View {
                     installedSkills: store.allSkills,
                     installedSkillIdentifiers: installedSkillIdentifiers,
                     projectUsageContextsByIdentifier: projectUsageContextsByIdentifier,
+                    onSelectSkill: selectSkillFromStats,
+                    onCopyTrigger: { trigger in
+                        copyToPasteboard(trigger, feedback: "Copied command")
+                    },
                     onBack: { showUsageStats = false }
                 )
             } else if let agent = selectedAgent {
@@ -582,6 +586,10 @@ struct MenuBarView: View {
                 installedSkills: store.allSkills,
                 installedSkillIdentifiers: installedSkillIdentifiers,
                 projectUsageContextsByIdentifier: projectUsageContextsByIdentifier,
+                onSelectSkill: selectSkillFromTool,
+                onCopyTrigger: { trigger in
+                    copyToPasteboard(trigger, feedback: "Copied command")
+                },
                 onBack: { activeToolScreen = nil }
             )
         case .settings:
@@ -2361,6 +2369,11 @@ struct MenuBarView: View {
         selectedAgent = nil
         selectedPlugin = nil
         selectedSkill = skill
+    }
+
+    private func selectSkillFromStats(_ skill: Skill) {
+        showUsageStats = false
+        selectSkillFromTool(skill)
     }
 
     private func selectAgentFromTool(_ agent: Agent) {
