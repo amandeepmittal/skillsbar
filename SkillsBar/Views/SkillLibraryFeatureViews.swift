@@ -260,7 +260,7 @@ struct CommandPaletteView: View {
 
     @ViewBuilder
     private func paletteIcon(_ iconName: String) -> some View {
-        if iconName == "ClaudeLogo" || iconName == "OpenAILogo" {
+        if iconName == "ClaudeLogo" || iconName == "CodexLogo" {
             Image(iconName)
                 .resizable()
                 .aspectRatio(contentMode: .fit)

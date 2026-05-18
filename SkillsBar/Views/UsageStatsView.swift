@@ -54,7 +54,7 @@ private enum UsageStatsFilter: String, CaseIterable, Identifiable {
         case .claudeCode:
             return "ClaudeLogo"
         case .codexCLI:
-            return "OpenAILogo"
+            return "CodexLogo"
         }
     }
 
@@ -948,7 +948,7 @@ struct UsageStatsView: View {
         case .claudeCode:
             return "ClaudeLogo"
         case .codexCLI:
-            return "OpenAILogo"
+            return "CodexLogo"
         }
     }
 

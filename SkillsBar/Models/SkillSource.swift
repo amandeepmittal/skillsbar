@@ -318,7 +318,7 @@ enum SkillSource: Hashable {
     var iconName: String {
         switch self {
         case .claudeCode: return "ClaudeLogo"
-        case .codexCLI: return "OpenAILogo"
+        case .codexCLI: return "CodexLogo"
         }
     }
 

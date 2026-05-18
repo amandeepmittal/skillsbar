@@ -6,7 +6,7 @@ struct Plugin: Identifiable, Hashable {
 
         var groupTitle: String { "Codex" }
         var sectionTitle: String { "Installed Plugins" }
-        var iconName: String { "OpenAILogo" }
+        var iconName: String { "CodexLogo" }
     }
 
     let id: String
