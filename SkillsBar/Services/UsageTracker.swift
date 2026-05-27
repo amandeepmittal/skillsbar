@@ -12,7 +12,7 @@ private let iso8601Plain: ISO8601DateFormatter = {
     return formatter
 }()
 
-private let usageCacheSchemaVersion = 7
+private let usageCacheSchemaVersion = 9
 private let maxJSONLineBytes = 16 * 1024 * 1024
 
 private let codexRolloutSkillSignalBytes = [
@@ -22,6 +22,9 @@ private let codexRolloutSkillSignalBytes = [
     Array("using".utf8),
     Array("Invoking".utf8),
     Array("invoking".utf8),
+    // Codex CLI announces skill invocations as: Loaded `/skill-name` ...
+    // Use the full prefix to avoid false-positive matches on unrelated "Loaded" text.
+    Array("Loaded `/".utf8),
 ]
 
 @MainActor
@@ -400,8 +403,12 @@ final class UsageTracker: ObservableObject {
 
         var sessionId = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
         var projectPath: String?
-        var isCodexDesktopSession = false
+        var isCodexSession = false
         var candidates: [CodexSkillCandidate] = []
+        // Once a skill is loaded (or explicitly triggered) in a Codex session, count each
+        // subsequent assistant message that references the skill by name as a separate "use".
+        // This mirrors how a user perceives skill usage: one load → many applied tasks.
+        var loadedSkills: Set<String> = []
 
         readJSONLines(at: path) { line in
             if containsByteSequence(line, Array(#""type":"session_meta""#.utf8)),
@@ -409,17 +416,24 @@ final class UsageTracker: ObservableObject {
                let payload = entry.payload {
                 sessionId = payload.id ?? sessionId
                 projectPath = payload.cwd
-                isCodexDesktopSession = payload.originator == "Codex Desktop"
+                // Accept any known Codex originator. Codex Desktop writes "Codex Desktop";
+                // Codex CLI writes "codex-tui" (and other CLI variants).
+                let originator = payload.originator ?? ""
+                isCodexSession = originator == "Codex Desktop" || originator.hasPrefix("codex")
                 return
             }
 
-            guard isCodexDesktopSession,
-                  codexRolloutLineContainsSkillSignal(line),
-                  let entry = try? decoder.decode(CodexRolloutLine.self, from: line) else {
-                return
-            }
+            guard isCodexSession else { return }
 
-            guard isCodexDesktopSession,
+            // Decide whether this line is worth decoding. The signal pre-filter catches the
+            // explicit invocation patterns ("$name", "/skills name", "Loaded `/name`", etc.).
+            // Once a skill is loaded in this session, also decode plain response_item lines
+            // so we can count assistant messages that reference the loaded skill by name.
+            let hasSkillSignal = codexRolloutLineContainsSkillSignal(line)
+            let mayContainSkillUse = !loadedSkills.isEmpty
+                && containsByteSequence(line, Array(#""type":"response_item""#.utf8))
+            guard hasSkillSignal || mayContainSkillUse,
+                  let entry = try? decoder.decode(CodexRolloutLine.self, from: line),
                   entry.type == "response_item",
                   entry.payload?.type == "message",
                   let role = entry.payload?.role,
@@ -434,10 +448,23 @@ final class UsageTracker: ObservableObject {
             case "user":
                 for skillName in extractCodexSkillNames(from: text) {
                     candidates.append(CodexSkillCandidate(skillName: skillName, timestamp: timestamp, isExplicitTrigger: true))
+                    loadedSkills.insert(skillName)
                 }
             case "assistant":
-                for skillName in extractCodexAssistantSkillNames(from: text) {
+                // Explicit invocation markers (Loaded `/name`, "using skill: name", etc.)
+                let explicitSkills = extractCodexAssistantSkillNames(from: text)
+                for skillName in explicitSkills {
                     candidates.append(CodexSkillCandidate(skillName: skillName, timestamp: timestamp, isExplicitTrigger: false))
+                    loadedSkills.insert(skillName)
+                }
+                // Skill-use signal: an assistant message after a load that references the
+                // loaded skill name by word-bounded match. Each such message is a candidate
+                // "use" event; the dedupe pass below collapses consecutive matches in a turn.
+                let explicitSet = Set(explicitSkills)
+                for skillName in loadedSkills where !explicitSet.contains(skillName) {
+                    if mentionsSkillName(skillName, in: text) {
+                        candidates.append(CodexSkillCandidate(skillName: skillName, timestamp: timestamp, isExplicitTrigger: false))
+                    }
                 }
             default:
                 return
@@ -445,15 +472,17 @@ final class UsageTracker: ObservableObject {
         }
 
         var invocations: [SkillInvocation] = []
-        var lastExplicitTriggerBySkill: [String: Date] = [:]
         var seenInvocationKeys: Set<String> = []
-        let duplicateWindow: TimeInterval = 15 * 60
+        var lastInvocationTimestampBySkill: [String: Date] = [:]
+        // Consecutive assistant messages within a single "turn" should count once. 60s is
+        // wider than a single agent response but narrower than between user prompts.
+        let usesDedupeWindow: TimeInterval = 60
 
-        for candidate in candidates {
-            if candidate.isExplicitTrigger {
-                lastExplicitTriggerBySkill[candidate.skillName] = candidate.timestamp
-            } else if let explicitDate = lastExplicitTriggerBySkill[candidate.skillName],
-                      abs(candidate.timestamp.timeIntervalSince(explicitDate)) <= duplicateWindow {
+        for candidate in candidates.sorted(by: { $0.timestamp < $1.timestamp }) {
+            // Dedupe: collapse multiple agent messages in the same task into one use.
+            if let last = lastInvocationTimestampBySkill[candidate.skillName],
+               abs(candidate.timestamp.timeIntervalSince(last)) <= usesDedupeWindow,
+               !candidate.isExplicitTrigger {
                 continue
             }
 
@@ -469,9 +498,25 @@ final class UsageTracker: ObservableObject {
                 sessionId: sessionId,
                 projectPath: projectPath
             ))
+            lastInvocationTimestampBySkill[candidate.skillName] = candidate.timestamp
         }
 
         return invocations
+    }
+
+    /// Word-bounded check for a skill name within free-form assistant text. Avoids matching
+    /// occurrences embedded in longer identifiers (e.g. "expo-docs-terminal-audit-foo" wouldn't
+    /// match "expo-docs-terminal-audit"). Case-sensitive: skill names in Codex output preserve case.
+    nonisolated private static func mentionsSkillName(_ skillName: String, in text: String) -> Bool {
+        guard !skillName.isEmpty, !text.isEmpty else { return false }
+        // Build a regex pattern: skill name surrounded by non-name characters (or string edges).
+        // Name characters: letters, digits, ".", "_", ":", "-".
+        let escaped = NSRegularExpression.escapedPattern(for: skillName)
+        let pattern = "(?:^|[^A-Za-z0-9._:-])" + escaped + "(?:$|[^A-Za-z0-9._:-])"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        let nsText = text as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        return regex.firstMatch(in: text, range: fullRange) != nil
     }
 
     nonisolated private static func extractCodexSkillNames(from text: String) -> [String] {
@@ -616,6 +661,8 @@ final class UsageTracker: ObservableObject {
             #"(?i)\busing\s+(?:the\s+)?skill:?\s+`?([A-Za-z0-9][A-Za-z0-9._:-]*)`?"#,
             #"(?i)\busing\s+(?:the\s+)?`?([A-Za-z0-9][A-Za-z0-9._:-]*)`?\s+(?:skill|guidance)\b"#,
             #"(?i)\binvoking\s+(?:the\s+)?skill:?\s+`?([A-Za-z0-9][A-Za-z0-9._:-]*)`?"#,
+            // Codex CLI announces user-skill invocations as: Loaded `/skill-name` ...
+            #"\bLoaded\s+`/([A-Za-z0-9][A-Za-z0-9._:-]*)`"#,
         ]
 
         var results: [String] = []
