@@ -35,18 +35,27 @@ struct SkillScanner {
         let dir = (home as NSString).appendingPathComponent(".claude/plugins/cache")
         guard fileManager.fileExists(atPath: dir) else { return [] }
 
-        var skills: [Skill] = []
+        var skillsByIdentifier: [String: Skill] = [:]
         guard let enumerator = fileManager.enumerator(atPath: dir) else { return [] }
 
         while let relativePath = enumerator.nextObject() as? String {
             guard (relativePath as NSString).lastPathComponent == "SKILL.md" else { continue }
             let fullPath = (dir as NSString).appendingPathComponent(relativePath)
             if let skill = parseSkillMD(at: fullPath, source: .claudeCode(.plugin)) {
-                skills.append(skill)
+                let key = skill.triggerCommand.lowercased()
+                if let existing = skillsByIdentifier[key] {
+                    let newDate = skill.lastModified ?? .distantPast
+                    let existingDate = existing.lastModified ?? .distantPast
+                    if newDate >= existingDate {
+                        skillsByIdentifier[key] = skill
+                    }
+                } else {
+                    skillsByIdentifier[key] = skill
+                }
             }
         }
 
-        return skills
+        return Array(skillsByIdentifier.values)
     }
 
     // MARK: - Codex
