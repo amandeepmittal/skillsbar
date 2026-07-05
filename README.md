@@ -51,7 +51,7 @@
 - **Collections** - create custom cross-source groups that can mix Claude Code and Codex skills in one saved view
 - **Codex plugin browsing** - browse installed Codex plugins with version, publisher, capabilities, included skills, and quick open/reveal actions
 - **What's New** - spotlight skills and installed plugins changed in the last 7 days in a dedicated section
-- **Usage stats** - tracks skill invocations from Claude Code history, Codex CLI history, and Codex Desktop session rollouts, including Codex plugin skills, with source-aware insights, summary breakdowns, and ranked per-skill usage sections
+- **Usage stats** - tracks Claude Code, Codex CLI, and Codex Desktop skill invocations in app-owned history, with 30d, 7d, and All ranges, daily/monthly heatmaps, quick hover totals by source, and ranked per-skill usage that still counts deleted skills
 - **"New" indicator** - skills modified in the last 24 hours are marked with a blue badge
 - **Detail views** - inspect rich metadata for skills, agents, and Codex plugins, including trigger commands, included skills, and file listings
 - **Full content preview** - expandable section to view the raw SKILL.md body

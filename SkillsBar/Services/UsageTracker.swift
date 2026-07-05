@@ -13,6 +13,7 @@ private let iso8601Plain: ISO8601DateFormatter = {
 }()
 
 private let usageCacheSchemaVersion = 9
+private let usageHistorySchemaVersion = 1
 private let maxJSONLineBytes = 16 * 1024 * 1024
 
 private let codexRolloutSkillSignalBytes = [
@@ -55,6 +56,14 @@ final class UsageTracker: ObservableObject {
         return directory.appendingPathComponent("usage-cache.json")
     }()
 
+    private let historyURL: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let directory = appSupport.appendingPathComponent("SkillsBar")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("usage-history.json")
+    }()
+
     // MARK: - Public API
 
     func stat(for skill: Skill) -> SkillUsageStat? {
@@ -67,34 +76,8 @@ final class UsageTracker: ObservableObject {
         Self.sortStats(Array(stats.values))
     }
 
-    func rankedStats(for source: UsageSource) -> [SkillUsageStat] {
-        Self.sortStats(stats.values.filter { $0.source == source })
-    }
-
-    var staleSkills: [SkillUsageStat] {
-        rankedStats.filter { $0.isStale }
-    }
-
-    var mostUsed: SkillUsageStat? {
-        rankedStats.first
-    }
-
-    var totalInvocations: Int {
-        stats.values.reduce(0) { $0 + $1.totalCount }
-    }
-
-    func totalInvocations(for source: UsageSource) -> Int {
-        stats.values
-            .filter { $0.source == source }
-            .reduce(0) { $0 + $1.totalCount }
-    }
-
-    func skillCount(for source: UsageSource) -> Int {
-        stats.values.filter { $0.source == source }.count
-    }
-
-    var sourcesWithStats: [UsageSource] {
-        UsageSource.allCases.filter { !rankedStats(for: $0).isEmpty }
+    func rankedStats(since cutoffDate: Date?) -> [SkillUsageStat] {
+        Self.sortStats(stats.values.compactMap { $0.scoped(since: cutoffDate) })
     }
 
     static func identifier(for skill: Skill) -> String {
@@ -111,7 +94,9 @@ final class UsageTracker: ObservableObject {
 
         Task.detached(priority: .userInitiated) {
             let cachedSnapshot = await self.loadCache()
-            let cachedStats = Self.buildStats(from: cachedSnapshot)
+            var history = await self.loadHistory()
+            let didMergeCachedSnapshot = Self.mergeInvocations(from: cachedSnapshot, into: &history)
+            let cachedStats = Self.buildStats(from: history)
             if !cachedStats.isEmpty {
                 await MainActor.run {
                     self.stats = cachedStats
@@ -120,13 +105,17 @@ final class UsageTracker: ObservableObject {
             }
 
             let cache = await self.performIncrementalParse()
-            let newStats = Self.buildStats(from: cache)
+            let didMergeParsedSnapshot = Self.mergeInvocations(from: cache, into: &history)
+            let newStats = Self.buildStats(from: history)
             await MainActor.run {
                 self.stats = newStats
                 self.isLoading = false
                 self.lastRefreshDate = Date()
             }
             await self.saveCache(cache)
+            if didMergeCachedSnapshot || didMergeParsedSnapshot {
+                await self.saveHistory(history)
+            }
         }
     }
 
@@ -692,13 +681,19 @@ final class UsageTracker: ObservableObject {
     // MARK: - Build Stats
 
     nonisolated private static func buildStats(from cache: UsageCache) -> [String: SkillUsageStat] {
+        buildStats(from: uniqueInvocations(in: cache))
+    }
+
+    nonisolated private static func buildStats(from history: UsageHistoryStore) -> [String: SkillUsageStat] {
+        buildStats(from: Array(history.events.values))
+    }
+
+    nonisolated private static func buildStats(from invocations: [SkillInvocation]) -> [String: SkillUsageStat] {
         var grouped: [String: [SkillInvocation]] = [:]
 
-        for parsedFile in cache.parsedFiles.values {
-            for invocation in parsedFile.invocations {
-                let key = statsKey(for: invocation.skillName, source: invocation.source)
-                grouped[key, default: []].append(invocation)
-            }
+        for invocation in invocations {
+            let key = statsKey(for: invocation.skillName, source: invocation.source)
+            grouped[key, default: []].append(invocation)
         }
 
         var result: [String: SkillUsageStat] = [:]
@@ -716,6 +711,49 @@ final class UsageTracker: ObservableObject {
         }
 
         return result
+    }
+
+    @discardableResult
+    nonisolated private static func mergeInvocations(from cache: UsageCache, into history: inout UsageHistoryStore) -> Bool {
+        var didChange = false
+        history.schemaVersion = usageHistorySchemaVersion
+
+        for invocation in uniqueInvocations(in: cache) {
+            let key = historyKey(for: invocation)
+            if history.events[key] == nil {
+                history.events[key] = invocation
+                didChange = true
+            }
+        }
+
+        if didChange {
+            history.lastUpdatedDate = Date()
+        }
+
+        return didChange
+    }
+
+    nonisolated private static func uniqueInvocations(in cache: UsageCache) -> [SkillInvocation] {
+        var invocationsByKey: [String: SkillInvocation] = [:]
+
+        for parsedFile in cache.parsedFiles.values {
+            for invocation in parsedFile.invocations {
+                invocationsByKey[historyKey(for: invocation)] = invocation
+            }
+        }
+
+        return Array(invocationsByKey.values)
+    }
+
+    nonisolated private static func historyKey(for invocation: SkillInvocation) -> String {
+        let timestampMilliseconds = Int64((invocation.timestamp.timeIntervalSince1970 * 1000).rounded())
+        return [
+            invocation.source.rawValue,
+            invocation.sessionId,
+            "\(timestampMilliseconds)",
+            invocation.skillName,
+            invocation.projectPath ?? "",
+        ].joined(separator: "::")
     }
 
     nonisolated private static func sortStats(_ stats: [SkillUsageStat]) -> [SkillUsageStat] {
@@ -813,6 +851,29 @@ final class UsageTracker: ObservableObject {
         return cache
     }
 
+    nonisolated private func loadHistory() async -> UsageHistoryStore {
+        let url = historyURL
+        guard let data = try? Data(contentsOf: url) else {
+            return UsageHistoryStore(schemaVersion: usageHistorySchemaVersion)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+            if let date = iso8601WithFractional.date(from: string) { return date }
+            if let date = iso8601Plain.date(from: string) { return date }
+            return Date.distantPast
+        }
+
+        guard var history = try? decoder.decode(UsageHistoryStore.self, from: data) else {
+            return UsageHistoryStore(schemaVersion: usageHistorySchemaVersion)
+        }
+
+        history.schemaVersion = usageHistorySchemaVersion
+        return history
+    }
+
     nonisolated private static func shouldReparseForUsageSchemaUpgrade(_ path: String) -> Bool {
         path.contains("/.codex/sessions/") || path.hasSuffix("/.codex/history.jsonl")
     }
@@ -829,6 +890,17 @@ final class UsageTracker: ObservableObject {
             try container.encode(iso8601WithFractional.string(from: date))
         }
         guard let data = try? encoder.encode(cache) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    nonisolated private func saveHistory(_ history: UsageHistoryStore) async {
+        let url = historyURL
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(iso8601WithFractional.string(from: date))
+        }
+        guard let data = try? encoder.encode(history) else { return }
         try? data.write(to: url, options: .atomic)
     }
 }

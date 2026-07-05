@@ -261,17 +261,6 @@ struct SkillDetailView: View {
                                 .frame(maxWidth: .infinity)
                             }
 
-                            if stat.isStale {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.orange)
-                                    Text("Not used in over 30 days")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-
                             Text(stat.frequencyDescription)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)

@@ -1306,61 +1306,6 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    func smartCollection(for kind: SmartCollectionKind, usageTracker: UsageTracker) -> ResolvedSmartCollection {
-        let skills: [Skill]
-        switch kind {
-        case .recentlyModified:
-            let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-            skills = lastScannedSkills
-                .filter { ($0.lastModified ?? .distantPast) >= cutoff }
-                .sorted { ($0.lastModified ?? .distantPast) > ($1.lastModified ?? .distantPast) }
-        case .mostUsed:
-            skills = lastScannedSkills
-                .filter { usageTracker.stat(for: $0) != nil }
-                .sorted {
-                    let lhs = usageTracker.stat(for: $0)?.totalCount ?? 0
-                    let rhs = usageTracker.stat(for: $1)?.totalCount ?? 0
-                    if lhs != rhs { return lhs > rhs }
-                    return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-                }
-        case .projectSkills:
-            skills = sortSkills(lastScannedSkills.filter(\.source.isProjectSkill))
-        case .conflicts:
-            var seen: Set<String> = []
-            skills = conflictGroups()
-                .flatMap(\.skills)
-                .filter { seen.insert($0.path).inserted }
-        case .unused:
-            skills = sortSkills(lastScannedSkills.filter { usageTracker.stat(for: $0) == nil })
-        case .claudeOnly:
-            skills = sortSkills(lastScannedSkills.filter {
-                if case .claudeCode = $0.source { return true }
-                return false
-            })
-        case .codexPlugins:
-            skills = sortSkills(lastScannedSkills.filter {
-                if case .codexCLI(.plugin) = $0.source { return true }
-                return false
-            })
-        }
-
-        return ResolvedSmartCollection(kind: kind, skills: skills)
-    }
-
-    @discardableResult
-    func saveSmartCollectionCopy(_ kind: SmartCollectionKind, usageTracker: UsageTracker) -> SkillCollection {
-        let resolved = smartCollection(for: kind, usageTracker: usageTracker)
-        let collection = SkillCollection(
-            name: uniqueCollectionName(from: kind.title),
-            skillPaths: resolved.skills.map(\.path),
-            iconName: kind.iconName,
-            accent: smartCollectionAccent(for: kind)
-        )
-        collections.append(collection)
-        persistCollections()
-        return collection
-    }
-
     func validationSummary(for skill: Skill) -> SkillValidationSummary {
         let content = try? String(contentsOfFile: skill.path, encoding: .utf8)
         let parsed = content.flatMap { FrontmatterParser.parse(content: $0) }
@@ -1413,95 +1358,6 @@ final class SkillStore: ObservableObject {
         return globalItems + projectItems
     }
 
-    func pluginAwarenessItems() -> [PluginAwarenessItem] {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        return plugins
-            .map { plugin in
-                PluginAwarenessItem(
-                    plugin: plugin,
-                    skillCount: skills(for: plugin).count,
-                    changedRecently: (plugin.lastModified ?? .distantPast) >= cutoff
-                )
-            }
-            .sorted { lhs, rhs in
-                if lhs.changedRecently != rhs.changedRecently {
-                    return lhs.changedRecently && !rhs.changedRecently
-                }
-                let lhsDate = lhs.plugin.lastModified ?? .distantPast
-                let rhsDate = rhs.plugin.lastModified ?? .distantPast
-                if lhsDate != rhsDate { return lhsDate > rhsDate }
-                return lhs.plugin.displayName.localizedCaseInsensitiveCompare(rhs.plugin.displayName) == .orderedAscending
-            }
-    }
-
-    func exportSnapshot() -> SkillLibraryExportSnapshot {
-        let defaults = UserDefaults.standard
-        return SkillLibraryExportSnapshot(
-            schemaVersion: 1,
-            exportedAt: Date(),
-            collections: collections,
-            pinnedPaths: Array(pinnedPaths).sorted(),
-            pinnedOrder: pinnedOrder,
-            projectSkillRoots: projectSkillRoots,
-            projectPinnedSkillPaths: projectPinnedSkillPaths,
-            appPreferences: SkillLibraryAppPreferences(
-                sortOptionRaw: sortOption.rawValue,
-                selectedTabRaw: defaults.string(forKey: "selectedTab"),
-                preferredAppearanceRaw: defaults.string(forKey: AppPreferenceKey.preferredAppearance),
-                showsWhatsNewSection: defaults.object(forKey: AppPreferenceKey.showsWhatsNewSection) as? Bool,
-                preferredEditorRaw: defaults.string(forKey: AppPreferenceKey.preferredEditor)
-            )
-        )
-    }
-
-    func importPreview(from data: Data) throws -> SkillLibraryImportPreview {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let snapshot = try decoder.decode(SkillLibraryExportSnapshot.self, from: data)
-        return SkillLibraryImportPreview(snapshot: snapshot)
-    }
-
-    func applyImport(_ preview: SkillLibraryImportPreview) {
-        let snapshot = preview.snapshot
-        collections = snapshot.collections
-        pinnedPaths = Set(snapshot.pinnedPaths)
-        pinnedOrder = snapshot.pinnedOrder.filter { pinnedPaths.contains($0) }
-        let orderedSet = Set(pinnedOrder)
-        for path in pinnedPaths where !orderedSet.contains(path) {
-            pinnedOrder.append(path)
-        }
-        projectSkillRoots = snapshot.projectSkillRoots
-        projectPinnedSkillPaths = snapshot.projectPinnedSkillPaths
-
-        persistCollections()
-        persistPins()
-        persistProjectPins()
-        persistProjectSkillRoots()
-        applyPreferences(snapshot.appPreferences)
-        refresh()
-        startWatching()
-    }
-
-    private func applyPreferences(_ preferences: SkillLibraryAppPreferences) {
-        let defaults = UserDefaults.standard
-        if let sortOptionRaw = preferences.sortOptionRaw,
-           let sortOption = SkillSortOption(rawValue: sortOptionRaw) {
-            self.sortOption = sortOption
-        }
-        if let selectedTabRaw = preferences.selectedTabRaw {
-            defaults.set(selectedTabRaw, forKey: "selectedTab")
-        }
-        if let preferredAppearanceRaw = preferences.preferredAppearanceRaw {
-            defaults.set(preferredAppearanceRaw, forKey: AppPreferenceKey.preferredAppearance)
-        }
-        if let showsWhatsNewSection = preferences.showsWhatsNewSection {
-            defaults.set(showsWhatsNewSection, forKey: AppPreferenceKey.showsWhatsNewSection)
-        }
-        if let preferredEditorRaw = preferences.preferredEditorRaw {
-            defaults.set(preferredEditorRaw, forKey: AppPreferenceKey.preferredEditor)
-        }
-    }
-
     private func watchedHealthFolders() -> [(title: String, path: String)] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var folders = [
@@ -1518,25 +1374,6 @@ final class SkillStore: ObservableObject {
         }
 
         return folders
-    }
-
-    private func smartCollectionAccent(for kind: SmartCollectionKind) -> SkillCollectionAccent {
-        switch kind {
-        case .recentlyModified:
-            return .teal
-        case .mostUsed:
-            return .blue
-        case .projectSkills:
-            return .green
-        case .conflicts:
-            return .orange
-        case .unused:
-            return .gray
-        case .claudeOnly:
-            return .pink
-        case .codexPlugins:
-            return .purple
-        }
     }
 
     private func validationExampleInvocation(for skill: Skill) -> String {

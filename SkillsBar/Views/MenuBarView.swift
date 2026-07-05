@@ -131,8 +131,6 @@ struct MenuBarView: View {
                 UsageStatsView(
                     usageTracker: usageTracker,
                     installedSkills: store.allSkills,
-                    installedSkillIdentifiers: installedSkillIdentifiers,
-                    projectUsageContextsByIdentifier: projectUsageContextsByIdentifier,
                     onSelectSkill: selectSkillFromStats,
                     onCopyTrigger: { trigger in
                         copyToPasteboard(trigger, feedback: "Copied command")
@@ -398,11 +396,7 @@ struct MenuBarView: View {
                         ForEach([
                             SkillsBarToolScreen.commandPalette,
                             .health,
-                            .smartCollections,
-                            .conflicts,
-                            .importExport,
                             .instructions,
-                            .plugins,
                         ]) { screen in
                             Button {
                                 openToolScreen(screen)
@@ -544,48 +538,16 @@ struct MenuBarView: View {
                 onRefresh: refreshAll,
                 onToast: showCopyToast
             )
-        case .smartCollections:
-            SmartCollectionsView(
-                store: store,
-                usageTracker: usageTracker,
-                onBack: { activeToolScreen = nil },
-                onSelectSkill: selectSkillFromTool,
-                onToast: showCopyToast
-            )
-        case .conflicts:
-            ConflictCenterView(
-                store: store,
-                onBack: { activeToolScreen = nil },
-                onSelectSkill: selectSkillFromTool,
-                onCopyTrigger: { skill in
-                    copyToPasteboard(skill.triggerCommand, feedback: "Copied command")
-                }
-            )
-        case .importExport:
-            ImportExportView(
-                store: store,
-                onBack: { activeToolScreen = nil },
-                onToast: showCopyToast
-            )
         case .instructions:
             InstructionsHubView(
                 store: store,
                 preferredEditor: preferredEditor,
                 onBack: { activeToolScreen = nil }
             )
-        case .plugins:
-            PluginAwarenessView(
-                store: store,
-                preferredEditor: preferredEditor,
-                onBack: { activeToolScreen = nil },
-                onSelectPlugin: selectPluginFromTool
-            )
         case .stats:
             UsageStatsView(
                 usageTracker: usageTracker,
                 installedSkills: store.allSkills,
-                installedSkillIdentifiers: installedSkillIdentifiers,
-                projectUsageContextsByIdentifier: projectUsageContextsByIdentifier,
                 onSelectSkill: selectSkillFromTool,
                 onCopyTrigger: { trigger in
                     copyToPasteboard(trigger, feedback: "Copied command")
@@ -2423,60 +2385,6 @@ struct MenuBarView: View {
         return true
     }
 
-    private var installedSkillIdentifiers: Set<String> {
-        let allSkills = store.groups.flatMap { $0.sections.flatMap { $0.skills } }
-        return Set(allSkills.map { UsageTracker.identifier(for: $0) })
-    }
-
-    private var projectUsageContextsByIdentifier: [String: [ProjectSkillUsageContext]] {
-        let allSkills = store.groups.flatMap { $0.sections.flatMap { $0.skills } }
-        var contextsByIdentifier: [String: [ProjectSkillUsageContext]] = [:]
-
-        for skill in allSkills where skill.source.isProjectSkill {
-            guard let projectRoot = store.projectSkillRoot(for: skill) else { continue }
-            let identifier = UsageTracker.identifier(for: skill)
-            let stat = usageTracker.stats[identifier]
-            let confirmedCount = stat?.invocations.filter { invocation in
-                invocationProjectPath(invocation.projectPath, matches: projectRoot.path)
-            }.count ?? 0
-
-            contextsByIdentifier[identifier, default: []].append(
-                ProjectSkillUsageContext(
-                    projectName: projectRoot.name,
-                    projectPath: projectRoot.path,
-                    matchKind: confirmedCount > 0 ? .confirmedUsage : .installedMatch,
-                    confirmedCount: confirmedCount
-                )
-            )
-        }
-
-        return contextsByIdentifier.mapValues { contexts in
-            contexts.sorted { lhs, rhs in
-                if lhs.isConfirmed != rhs.isConfirmed {
-                    return lhs.isConfirmed && !rhs.isConfirmed
-                }
-                if lhs.confirmedCount != rhs.confirmedCount {
-                    return lhs.confirmedCount > rhs.confirmedCount
-                }
-                return lhs.projectName.localizedCaseInsensitiveCompare(rhs.projectName) == .orderedAscending
-            }
-        }
-    }
-
-    private func invocationProjectPath(_ invocationPath: String?, matches rootPath: String) -> Bool {
-        guard let invocationPath, !invocationPath.isEmpty else { return false }
-
-        let standardizedRoot = (rootPath as NSString).standardizingPath
-        if (invocationPath as NSString).standardizingPath == standardizedRoot {
-            return true
-        }
-
-        return invocationPath == claudeProjectDirectoryName(for: standardizedRoot)
-    }
-
-    private func claudeProjectDirectoryName(for path: String) -> String {
-        path.replacingOccurrences(of: "/", with: "-")
-    }
 }
 
 private struct CopyToastView: View {

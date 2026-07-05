@@ -89,16 +89,6 @@ struct SkillUsageStat: Identifiable {
         source.commandPrefix + skillName
     }
 
-    var daysSinceLastUsed: Int? {
-        guard let date = lastUsedDate else { return nil }
-        return Calendar.current.dateComponents([.day], from: date, to: Date()).day
-    }
-
-    var isStale: Bool {
-        guard let days = daysSinceLastUsed else { return false }
-        return days >= 30
-    }
-
     var frequencyDescription: String {
         guard let first = firstUsedDate, let last = lastUsedDate else {
             return "No usage data"
@@ -114,25 +104,26 @@ struct SkillUsageStat: Identifiable {
         let perMonth = Double(totalCount) / (Double(daySpan) / 30.0)
         return "~\(Int(perMonth.rounded()))x/month"
     }
-}
 
-struct ProjectSkillUsageContext: Identifiable, Hashable {
-    enum MatchKind: Hashable {
-        case confirmedUsage
-        case installedMatch
-    }
+    func scoped(since cutoffDate: Date?) -> SkillUsageStat? {
+        let scopedInvocations: [SkillInvocation]
+        if let cutoffDate {
+            scopedInvocations = invocations.filter { $0.timestamp >= cutoffDate }
+        } else {
+            scopedInvocations = invocations
+        }
 
-    let projectName: String
-    let projectPath: String
-    let matchKind: MatchKind
-    let confirmedCount: Int
+        let sortedInvocations = scopedInvocations.sorted { $0.timestamp < $1.timestamp }
+        guard let firstInvocation = sortedInvocations.first else { return nil }
 
-    var id: String {
-        "\(projectPath)::\(matchKind)"
-    }
-
-    var isConfirmed: Bool {
-        matchKind == .confirmedUsage
+        return SkillUsageStat(
+            source: firstInvocation.source,
+            skillName: firstInvocation.skillName,
+            totalCount: sortedInvocations.count,
+            lastUsedDate: sortedInvocations.last?.timestamp,
+            firstUsedDate: sortedInvocations.first?.timestamp,
+            invocations: sortedInvocations
+        )
     }
 }
 
@@ -147,4 +138,10 @@ struct UsageCache: Codable {
     var schemaVersion: Int = 1
     var parsedFiles: [String: ParsedSessionFile] = [:]
     var lastFullScanDate: Date?
+}
+
+struct UsageHistoryStore: Codable {
+    var schemaVersion: Int = 1
+    var events: [String: SkillInvocation] = [:]
+    var lastUpdatedDate: Date?
 }
