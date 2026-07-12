@@ -15,7 +15,11 @@
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/codex-built-in.png" width="320" alt="Codex built-in skills" />
+  <img src="screenshots/codex-built-in.png" width="320" alt="Codex built-in skills with source filters" />
+  &nbsp;&nbsp;
+  <img src="screenshots/command-palette.png" width="320" alt="Command Palette" />
+  &nbsp;&nbsp;
+  <img src="screenshots/usage-stats.png" width="320" alt="Usage stats with daily heatmap and ranked skills" />
   &nbsp;&nbsp;
   <img src="screenshots/project-skills.png" width="320" alt="Project Skills screen" />
   &nbsp;&nbsp;
@@ -23,15 +27,15 @@
   &nbsp;&nbsp;
   <img src="screenshots/project-items.png" width="320" alt="Project skills and agents" />
   &nbsp;&nbsp;
-  <img src="screenshots/settings-view.png" width="320" alt="Settings view" />
+  <img src="screenshots/skill-detail.png" width="320" alt="Project skill detail view" />
   &nbsp;&nbsp;
   <img src="screenshots/collections-view.png" width="320" alt="Collections view" />
   &nbsp;&nbsp;
-  <img src="screenshots/plugin-detail.png" width="320" alt="Plugin detail view" />
+  <img src="screenshots/skill-health.png" width="320" alt="Skill Health checkup" />
   &nbsp;&nbsp;
-  <img src="screenshots/skill-detail.png" width="320" alt="Project skill detail view" />
+  <img src="screenshots/instructions-menu.png" width="320" alt="Instructions Hub" />
   &nbsp;&nbsp;
-  <img src="screenshots/instructions-menu.png" width="320" alt="Global instructions menu" />
+  <img src="screenshots/settings-view.png" width="320" alt="Settings view" />
   &nbsp;&nbsp;
   <img src="screenshots/skill-context-menu.png" width="320" alt="Skill context menu" />
 </p>
@@ -40,10 +44,12 @@
 
 - **Tabbed browsing** - separate tabs for Claude Code, Codex, and Collections with count badges
 - **Search** - filter skills, plugins, agents, and collections by name, description, metadata, collection trigger commands, and source tokens such as `source:project`
+- **Command Palette** - press `Cmd + K` inside the popover to search skills, agents, plugins, collections, projects, tool screens, and actions from one place, with inline copy-trigger and open-in-editor buttons
 - **Pin favorites** - pin frequently used skills to the top of each tab (persisted across restarts)
 - **Settings** - choose whether to show What's New, switch between system, light, and dark appearance, and control the default sort from one place
 - **Project workspace view** - manage trusted project folders in a dedicated screen with project skills, project agents, instruction files, health, conflicts, recents, pinning, rename, and reorder controls
 - **Project instructions** - detect project-local `CLAUDE.md`, `AGENTS.md`, and `.codex/AGENTS.md` files next to the trusted project
+- **Instructions Hub** - one screen for global and project instruction files with Ready, Missing, Empty, and Unreadable states, plus open-or-create actions in your preferred editor
 - **Project actions** - create collections from a project, open the project in Claude Code or Codex, and create `.claude/skills` with explicit consent when onboarding an empty project
 - **Preferred editor** - choose an installed editor such as VS Code, WebStorm, Cursor, Zed, or Xcode for opening skills, agents, plugins, and global instructions
 - **Start at Login** - open SkillsBar automatically when you sign in, with a shortcut to Login Items settings if approval is needed
@@ -52,6 +58,7 @@
 - **Codex plugin browsing** - browse installed Codex plugins with version, publisher, capabilities, included skills, and quick open/reveal actions
 - **What's New** - spotlight skills and installed plugins changed in the last 7 days in a dedicated section
 - **Usage stats** - tracks Claude Code, Codex CLI, and Codex Desktop skill invocations in app-owned history, with 30d, 7d, and All ranges, daily/monthly heatmaps, quick hover totals by source, and ranked per-skill usage that still counts deleted skills
+- **Skill Health** - a checkup screen in the footer Tools menu that flags invalid frontmatter, missing descriptions, duplicate triggers, missing collection paths, unreadable folders, and stale pins, with one-click cleanup actions
 - **"New" indicator** - skills modified in the last 24 hours are marked with a blue badge
 - **Detail views** - inspect rich metadata for skills, agents, and Codex plugins, including trigger commands, included skills, and file listings
 - **Full content preview** - expandable section to view the raw SKILL.md body
@@ -59,6 +66,7 @@
 - **Right-click context menu** - pin, add to collections, open, copy, and delete directly from the list
 - **About & utilities** - view watched directories, library counts, and reveal watched folders directly in Finder from the About screen
 - **Global hotkey** - toggle the popover from anywhere with `Option + Shift + S`
+- **Keyboard navigation** - arrow keys and Return to browse and open items, `Esc` to go back or clear search, `Cmd + Left` to navigate back, `Cmd + K` for the Command Palette
 - **Agent browsing** - browse Claude Code sub-agents (user and plugin) with model, color, and tools metadata
 - **Live updates** - FSEvents directory watcher auto-refreshes when skills, plugins, or agents are added or removed
 - **No dock icon** - lives entirely in the menu bar
@@ -75,7 +83,7 @@
 | `<project>/CLAUDE.md`       | Approved project Claude Code instructions  |
 | `<project>/AGENTS.md`       | Approved project Codex instructions        |
 | `<project>/.codex/AGENTS.md` | Approved project Codex instructions       |
-| `~/.codex/skills/`         | Codex built-in and user skills             |
+| `~/.codex/skills/`         | Codex user skills (`.system/` built-ins)   |
 | `~/.codex/plugins/cache/`  | Codex plugins and plugin-provided skills   |
 | `~/.codex/history.jsonl`   | Codex CLI skill invocation history         |
 | `~/.codex/sessions/`       | Codex Desktop session rollouts             |
